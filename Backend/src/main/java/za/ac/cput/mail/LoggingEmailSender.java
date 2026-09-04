@@ -7,7 +7,7 @@
  spring.mail.host is unset). Logs at WARN so the code is easy to find in the
  console and so nobody mistakes this for production behaviour.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

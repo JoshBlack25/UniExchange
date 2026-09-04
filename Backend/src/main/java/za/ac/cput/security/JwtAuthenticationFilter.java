@@ -7,7 +7,7 @@
  A bad or expired token is not an error here - the context is simply left empty and
  the authorization rules in SecurityConfig decide what happens next.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

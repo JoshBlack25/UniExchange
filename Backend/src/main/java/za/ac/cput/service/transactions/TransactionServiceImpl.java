@@ -4,7 +4,7 @@
  Business logic for Transaction. Implements the generic CRUD contract
  IService<Transaction, Long> plus the Transaction-specific operations.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

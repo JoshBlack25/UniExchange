@@ -5,7 +5,7 @@
  VendorApplication is validated with Helper before it exists - the entity itself
  exposes only a Builder and a protected JPA constructor.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

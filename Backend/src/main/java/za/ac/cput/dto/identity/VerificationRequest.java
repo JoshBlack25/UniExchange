@@ -4,7 +4,7 @@
  Inbound payload for creating/updating a Verification. Entities have no public
  setters, so requests arrive as a record and are handed to VerificationFactory.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

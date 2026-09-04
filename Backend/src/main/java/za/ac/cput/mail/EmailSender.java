@@ -10,7 +10,7 @@
  and test the full signup + OTP flow without SMTP credentials, and the test suite
  never sends mail to a real inbox.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

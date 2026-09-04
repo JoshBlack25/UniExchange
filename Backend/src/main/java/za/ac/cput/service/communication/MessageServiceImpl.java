@@ -4,7 +4,7 @@
  Business logic for Message. Implements the generic CRUD contract
  IService<Message, Long> plus the Message-specific operations.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

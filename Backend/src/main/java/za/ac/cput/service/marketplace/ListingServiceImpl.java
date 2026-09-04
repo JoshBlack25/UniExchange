@@ -4,7 +4,7 @@
  Business logic for Listing. Implements the generic CRUD contract
  IService<Listing, Long> plus the Listing-specific operations.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

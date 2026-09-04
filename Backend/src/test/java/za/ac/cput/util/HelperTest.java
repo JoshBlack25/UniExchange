@@ -4,7 +4,7 @@
  JUnit 5 replacement for the validation section of the old DomainTest main-method
  runner, which used to live (incorrectly) in src/main/java.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

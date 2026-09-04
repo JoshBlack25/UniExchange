@@ -8,7 +8,7 @@
  @DataJpaTest so it exercises the real repository against H2, with the two
  collaborators OtpService needs supplied directly.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

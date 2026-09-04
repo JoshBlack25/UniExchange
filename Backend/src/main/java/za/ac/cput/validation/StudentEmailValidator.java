@@ -9,7 +9,7 @@
  verification gate that is one digit too strict locks real students out of the
  platform entirely, which is the worst failure mode this feature has.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 
