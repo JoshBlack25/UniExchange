@@ -17,6 +17,7 @@ import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -40,6 +41,30 @@ public class GlobalExceptionHandler {
         body.put("fields", fields);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    /*
+     Must sit before the AuthenticationException handler in intent: DisabledException
+     IS an AuthenticationException, so without this a student whose email is simply
+     unverified would be told "Invalid email or password" and have no way forward.
+     Spring picks the most specific handler, so both can coexist.
+
+     Trade-off accepted: distinguishing "not verified" from "wrong password" is a
+     mild account-enumeration signal. For a campus marketplace the usable flow is
+     worth more than hiding it.
+    */
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<Map<String, Object>> handleUnverified(DisabledException ex) {
+        Map<String, Object> body = base(HttpStatus.FORBIDDEN,
+                "Verify your student email before signing in.");
+        body.put("code", "EMAIL_NOT_VERIFIED");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleUnavailable(IllegalStateException ex) {
+        // Raised when the verification email could not be delivered.
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
     }
 
     @ExceptionHandler(AuthenticationException.class)

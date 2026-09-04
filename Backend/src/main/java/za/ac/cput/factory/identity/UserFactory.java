@@ -121,4 +121,27 @@ public class UserFactory {
                 .build();
     }
 
+
+    /**
+     * Marks a user's email as verified: ACTIVE, with emailVerifiedAt stamped.
+     *
+     * Exists as its own method because updateUser has no emailVerifiedAt
+     * parameter, so activating through it left the column permanently null -
+     * the account looked active but carried no record of when, or whether, the
+     * mailbox was ever proved.
+     */
+    public static User verifyEmail(User existing) {
+        if (!Helper.isValidObject(existing)) {
+            throw new IllegalArgumentException("User: existing record is required to verify");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        return new User.Builder()
+                .copy(existing)
+                .setAccountStatus(AccountStatus.ACTIVE)
+                .setEmailVerifiedAt(now)
+                .setUpdatedAt(now)
+                .build();
+    }
+
 }

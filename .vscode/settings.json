@@ -1,4 +1,26 @@
 {
   "java.compile.nullAnalysis.mode": "automatic",
-  "java.configuration.updateBuildConfiguration": "interactive"
+  "java.configuration.updateBuildConfiguration": "interactive",
+
+  // No JDK path here on purpose: the Java extension auto-detects installed JDKs,
+  // and an absolute path would be wrong on every other machine. This project
+  // compiles with --release 25, so it needs a JDK 25 or newer. If the extension
+  // picks the wrong one, add java.configuration.runtimes to your own VS Code
+  // USER settings (Cmd+Shift+P -> "Preferences: Open User Settings (JSON)"),
+  // not here.
+
+  "files.exclude": {
+    "**/target": true,
+    "**/dist": true,
+    "**/*.tsbuildinfo": true
+  },
+  "search.exclude": {
+    "**/target": true,
+    "**/dist": true,
+    "**/node_modules": true,
+    "**/package-lock.json": true
+  },
+
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
 }

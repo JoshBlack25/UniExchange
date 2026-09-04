@@ -100,10 +100,17 @@ public class UniExchangeUserDetailsService implements UserDetailsService {
             return this.user.getEmail();
         }
 
+        /*
+         ACTIVE only. PENDING_VERIFICATION deliberately fails here: an account
+         is unusable until the emailed code has proved the student owns the
+         mailbox, which is the whole point of the verification gate.
+
+         Spring turns this into a DisabledException, which GlobalExceptionHandler
+         maps to 403 EMAIL_NOT_VERIFIED so the client can route to the code screen.
+        */
         @Override
         public boolean isEnabled() {
-            AccountStatus status = this.user.getAccountStatus();
-            return status == AccountStatus.ACTIVE || status == AccountStatus.PENDING_VERIFICATION;
+            return this.user.getAccountStatus() == AccountStatus.ACTIVE;
         }
 
         @Override

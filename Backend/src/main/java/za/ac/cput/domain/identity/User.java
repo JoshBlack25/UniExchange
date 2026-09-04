@@ -154,7 +154,8 @@ public class User {
                 ", middleName='" + middleName + '\'' +
                 ", lastName='" + lastName + '\'' +
                 ", cellPhone='" + cellPhone + '\'' +
-                ", passwordHash='" + passwordHash + '\'' +
+                // Never print the hash: this entity is logged in auth flows.
+                ", passwordHash='[REDACTED]'" +
                 ", dateOfBirth=" + dateOfBirth +
                 ", accountStatus=" + accountStatus +
                 ", emailVerifiedAt=" + emailVerifiedAt +
