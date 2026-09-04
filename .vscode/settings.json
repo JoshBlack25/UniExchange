@@ -1,6 +1,9 @@
 {
   "java.compile.nullAnalysis.mode": "automatic",
-  "java.configuration.updateBuildConfiguration": "interactive",
+  // "automatic" re-syncs the classpath whenever pom.xml changes. With
+  // "interactive" you must run "Java: Reload Projects" by hand, and a stale
+  // import shows up as "not a valid java project".
+  "java.configuration.updateBuildConfiguration": "automatic",
 
   // No JDK path here on purpose: the Java extension auto-detects installed JDKs,
   // and an absolute path would be wrong on every other machine. This project

@@ -7,21 +7,17 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "java",
-      "name": "UniExchangeApplication",
-      "request": "launch",
-      "mainClass": "za.ac.cput.UniExchangeApplication",
-      "projectName": "Backend"
-    },
-    {
       "name": "Backend: Spring Boot",
       "type": "java",
       "request": "launch",
+      // No "projectName": the Java extension names a Maven project after either
+      // the artifactId ("uniexchange") or the folder ("Backend") depending on
+      // its version, and pinning the wrong one fails with
+      // "ConfigError: The project '...' is not a valid java project".
+      // There is only one Java project here, so mainClass alone resolves it.
       "mainClass": "za.ac.cput.UniExchangeApplication",
-      "projectName": "uniexchange",
       "cwd": "${workspaceFolder}/Backend",
       "console": "internalConsole",
-      "env": {},
       "vmArgs": "-Dspring.output.ansi.enabled=ALWAYS"
     },
     {
