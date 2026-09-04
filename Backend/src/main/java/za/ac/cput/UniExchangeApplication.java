@@ -6,7 +6,7 @@
  pick up domain/, repository/, service/, controller/, security/ and config/
  automatically - no scanBasePackages, @EntityScan or @EnableJpaRepositories needed.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

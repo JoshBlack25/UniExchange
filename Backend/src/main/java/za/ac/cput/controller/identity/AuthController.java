@@ -12,7 +12,7 @@
  Every entity here (User, Role, UserRole, Verification) is built through its
  factory, never through setters.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

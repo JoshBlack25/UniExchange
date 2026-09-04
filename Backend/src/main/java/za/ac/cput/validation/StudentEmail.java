@@ -9,7 +9,7 @@
  hold non-student addresses - baking the rule into the entity's factory would
  block them later and would fight the app.auth.student-email-pattern override.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

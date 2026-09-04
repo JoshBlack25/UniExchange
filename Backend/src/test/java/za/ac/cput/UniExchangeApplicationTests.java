@@ -5,7 +5,7 @@
  @EnableJpaRepositories, because the application class sits at the base package
  root), 22 services, 23 controllers, the JWT filter chain and the JwtService key.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

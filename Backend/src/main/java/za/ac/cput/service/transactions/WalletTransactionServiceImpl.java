@@ -4,7 +4,7 @@
  Business logic for WalletTransaction. Implements the generic CRUD contract
  IService<WalletTransaction, Long> plus the WalletTransaction-specific operations.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

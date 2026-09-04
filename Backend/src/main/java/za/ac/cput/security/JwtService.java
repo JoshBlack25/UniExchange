@@ -9,7 +9,7 @@
  Jwts.parser().verifyWith(key).build().parseSignedClaims(t).getPayload() rather than
  setSigningKey()/parseClaimsJws()/getBody().
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

@@ -4,7 +4,7 @@
  Turns factory validation failures into 400 responses. Without this every
  IllegalArgumentException thrown by a *Factory would surface as a 500.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

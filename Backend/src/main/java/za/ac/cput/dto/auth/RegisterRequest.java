@@ -8,7 +8,7 @@
  fields map that GlobalExceptionHandler produces, so the signup form can show
  the error against the email input.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

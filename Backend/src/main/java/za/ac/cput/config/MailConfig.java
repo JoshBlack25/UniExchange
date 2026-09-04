@@ -7,7 +7,7 @@
  the fallback below takes over and logs each message instead. That is what lets
  the whole signup + OTP flow be run and tested with no mail credentials at all.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

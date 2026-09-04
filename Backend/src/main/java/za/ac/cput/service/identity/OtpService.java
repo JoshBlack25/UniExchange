@@ -13,7 +13,7 @@
   - Issuing a new code invalidates any earlier unused one, so an old email
     cannot be replayed.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 

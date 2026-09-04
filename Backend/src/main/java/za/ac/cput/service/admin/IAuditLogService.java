@@ -3,7 +3,7 @@
 
  Service contract for AuditLog.
 
- Author: <Your Full Name> (<Student Number>)
+ Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
 
