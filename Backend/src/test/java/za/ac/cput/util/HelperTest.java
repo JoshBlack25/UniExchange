@@ -35,6 +35,39 @@ class HelperTest {
     }
 
     @Test
+    void isValidStudentEmail() {
+        // Every real team student number must be accepted - if any of these
+        // fail, the signup gate is locking out its own developers.
+        assertTrue(Helper.isValidStudentEmail("230255639@mycput.ac.za"));
+        assertTrue(Helper.isValidStudentEmail("230317693@mycput.ac.za"));
+        assertTrue(Helper.isValidStudentEmail("230270565@mycput.ac.za"));
+        assertTrue(Helper.isValidStudentEmail("240453182@mycput.ac.za"));
+        assertTrue(Helper.isValidStudentEmail("221374698@mycput.ac.za"));
+
+        // The domain is matched case-insensitively, and stray spaces are trimmed.
+        assertTrue(Helper.isValidStudentEmail("240453182@MyCPUT.ac.za"));
+        assertTrue(Helper.isValidStudentEmail("  240453182@mycput.ac.za  "));
+
+        // 8 and 10 digits are allowed on purpose: CPUT publishes no digit-count
+        // spec, so the length stays loose while the domain stays strict.
+        assertTrue(Helper.isValidStudentEmail("21021021@mycput.ac.za"));
+        assertTrue(Helper.isValidStudentEmail("2102102102@mycput.ac.za"));
+    }
+
+    @Test
+    void isValidStudentEmailRejectsNonStudents() {
+        assertFalse(Helper.isValidStudentEmail("abc@mycput.ac.za"));          // not numeric
+        assertFalse(Helper.isValidStudentEmail("12345@mycput.ac.za"));        // too short
+        assertFalse(Helper.isValidStudentEmail("24045318200@mycput.ac.za"));  // too long
+        assertFalse(Helper.isValidStudentEmail("240453182@gmail.com"));       // public email
+        assertFalse(Helper.isValidStudentEmail("240453182@cput.ac.za"));      // staff domain
+        assertFalse(Helper.isValidStudentEmail("240453182@mycput.ac.za.evil.com"));
+        assertFalse(Helper.isValidStudentEmail("240453182+alias@mycput.ac.za"));
+        assertFalse(Helper.isValidStudentEmail(""));
+        assertFalse(Helper.isValidStudentEmail(null));
+    }
+
+    @Test
     void isValidMobileNumber() {
         assertTrue(Helper.isValidMobileNumber("0821234567"));
         assertFalse(Helper.isValidMobileNumber("082123"));

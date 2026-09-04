@@ -4,6 +4,10 @@
  Registration payload. Carries a RAW password, which no entity models - User only
  ever holds a passwordHash - so this cannot be replaced by the entity itself.
 
+ The email must be a CPUT student address; @StudentEmail reports through the
+ fields map that GlobalExceptionHandler produces, so the signup form can show
+ the error against the email input.
+
  Author: <Your Full Name> (<Student Number>)
  Date: 04 September 2026
 */
@@ -16,8 +20,10 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import za.ac.cput.validation.StudentEmail;
+
 public record RegisterRequest(
-        @NotBlank @Email String email,
+        @NotBlank @Email @StudentEmail String email,
         @NotBlank String firstName,
         String middleName,
         @NotBlank String lastName,
