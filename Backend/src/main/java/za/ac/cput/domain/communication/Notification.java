@@ -51,7 +51,7 @@ public class Notification {
     @Column(nullable = false, name = "is_read")
     private boolean isRead;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "created_at")
+    @Column(nullable = false, name = "created_at")
     private LocalDateTime createdAt;
 
     //  Constructors

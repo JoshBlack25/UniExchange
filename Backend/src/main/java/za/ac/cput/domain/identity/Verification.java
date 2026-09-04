@@ -45,7 +45,7 @@ public class Verification {
     @Column(name = "verified_at")
     private LocalDateTime verifiedAt;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "created_at")
+    @Column(nullable = false, name = "created_at")
     private LocalDateTime createdAt;
 
     //  Constructors

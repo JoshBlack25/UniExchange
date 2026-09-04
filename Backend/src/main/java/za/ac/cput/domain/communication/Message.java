@@ -35,7 +35,7 @@ public class Message {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "sent_at")
+    @Column(nullable = false, name = "sent_at")
     private LocalDateTime sentAt;
 
     //  Constructors

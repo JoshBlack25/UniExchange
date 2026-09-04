@@ -32,7 +32,7 @@ public class ConversationParticipant {
     @Column(nullable = false, name = "user_id")
     private long userId;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "joined_at")
+    @Column(nullable = false, name = "joined_at")
     private LocalDateTime joinedAt;
 
     @Column(name = "last_read_at")

@@ -48,7 +48,7 @@ public class VendorApplication {
     @Column(length = 500, name = "review_note")
     private String reviewNote;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "created_at")
+    @Column(nullable = false, name = "created_at")
     private LocalDateTime createdAt;
 
     @Column(name = "reviewed_at")
