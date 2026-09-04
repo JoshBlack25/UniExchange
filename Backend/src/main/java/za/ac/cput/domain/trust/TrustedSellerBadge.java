@@ -29,7 +29,7 @@ public class TrustedSellerBadge {
     @Column(nullable = false, unique = true, name = "user_id")
     private long userId;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "earned_at")
+    @Column(nullable = false, name = "earned_at")
     private LocalDateTime earnedAt;
 
     @Column(name = "revoked_at")

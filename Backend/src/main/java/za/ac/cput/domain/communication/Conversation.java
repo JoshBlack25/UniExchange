@@ -26,7 +26,7 @@ public class Conversation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long conversationId;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "created_at")
+    @Column(nullable = false, name = "created_at")
     private LocalDateTime createdAt;
 
     //  Constructors

@@ -36,7 +36,7 @@ public class AuditLog {
     @Column(columnDefinition = "TEXT")
     private String details;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "created_at")
+    @Column(nullable = false, name = "created_at")
     private LocalDateTime createdAt;
 
     //  Constructors

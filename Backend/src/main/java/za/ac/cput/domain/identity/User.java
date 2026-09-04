@@ -9,6 +9,8 @@
 
 package za.ac.cput.domain.identity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -61,10 +63,10 @@ public class User {
     @Column(name = "campus_id")
     private Long campusId;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "created_at")
+    @Column(nullable = false, name = "created_at")
     private LocalDateTime createdAt;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "updated_at")
+    @Column(nullable = false, name = "updated_at")
     private LocalDateTime updatedAt;
 
     //  Constructors
@@ -113,6 +115,7 @@ public class User {
         return cellPhone;
     }
 
+    @JsonIgnore
     public String getPasswordHash() {
         return passwordHash;
     }

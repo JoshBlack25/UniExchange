@@ -52,7 +52,7 @@ public class WalletTransaction {
     @Column(length = 255)
     private String description;
 
-    @Column(nullable = false, insertable = false, updatable = false, name = "created_at")
+    @Column(nullable = false, name = "created_at")
     private LocalDateTime createdAt;
 
     //  Constructors
