@@ -12,6 +12,7 @@ Unlike Facebook Marketplace or Gumtree, UniExchange is closed to the public: onl
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
+- [Running in VS Code](#running-in-vs-code)
 - [Configuration Reference](#configuration-reference)
 - [Email / OTP Delivery](#email--otp-delivery)
 - [Backend](#backend)
@@ -198,7 +199,17 @@ $env:DB_PASSWORD = "your-mysql-password"
 spring.datasource.password=your-mysql-password
 ```
 
-Then run with `-Dspring-boot.run.profiles=local`. That filename is already in `.gitignore`, so it can never be committed.
+`application.properties` sets `spring.profiles.active=local`, so this file is
+picked up automatically — no extra flags. When it does not exist, Spring simply
+ignores it, so teammates who never create one are unaffected. The filename is
+already in `.gitignore`, so it can never be committed.
+
+This is also where SMTP credentials go — see
+[Email / OTP Delivery](#email--otp-delivery).
+
+> Why a profile file and not `spring.config.import`? Imported config has *lower*
+> precedence than the file importing it, so an imported override is silently
+> ignored. A profile-specific file overrides the base file, which is what we need.
 
 > If your MySQL `root` account has no password, skip this step — the default is empty.
 
@@ -208,6 +219,10 @@ Then run with `-Dspring-boot.run.profiles=local`. That filename is already in `.
 cd Backend
 ./mvnw spring-boot:run          # Windows: .\mvnw.cmd spring-boot:run
 ```
+
+> **In VS Code you can skip steps 4 and 5** — press `F5` with
+> "Full Stack: Backend + Frontend" selected and both start together.
+> See [Running in VS Code](#running-in-vs-code).
 
 The first run downloads dependencies, so it needs internet and takes a minute. You should see `Started UniExchangeApplication`, 22 `create table` statements on a fresh database, and:
 
@@ -264,6 +279,50 @@ No dev proxy is configured or needed — the backend already allows `http://loca
 
 ---
 
+## Running in VS Code
+
+The repo ships run/debug profiles, so once the prerequisites and your DB password
+are set up you do **not** need two terminals.
+
+1. Install the recommended extensions — VS Code prompts you when you open the
+   repo, or run **"Extensions: Show Recommended Extensions"**. The important one
+   is the **Extension Pack for Java**.
+2. Open the **Run and Debug** panel (the play-with-bug icon, or `Cmd/Ctrl+Shift+D`).
+3. Choose **"Full Stack: Backend + Frontend"** and press the green play button (or `F5`).
+
+That starts the API on :8080 and the Vite dev server on :5173, then opens Chrome
+attached to the debugger. Breakpoints work in Java, in the Vite process, and in
+your React `.tsx` files. Stopping one stops both.
+
+The individual profiles are also there if you only want one half:
+
+| Profile | Purpose |
+|---|---|
+| `Full Stack: Backend + Frontend` | Both at once — the usual choice |
+| `Backend: Spring Boot` | API only, with Java breakpoints |
+| `Frontend: Vite dev server` | Dev server only, auto-attaches Chrome |
+| `Frontend: attach Chrome to :5173` | When the dev server is already running in a terminal |
+
+### Tasks
+
+**"Tasks: Run Task"** (`Cmd/Ctrl+Shift+P`) gives you:
+
+| Task | What it does |
+|---|---|
+| `frontend: install` | `npm install` — run once after cloning |
+| `frontend: dev server` / `build` / `lint` | The npm scripts |
+| `backend: test` / `backend: build` | Maven, via the wrapper |
+| **`full stack: verify`** | Backend tests → frontend lint → frontend build. **Run this before opening a PR.** |
+
+> The Vite profile sets `NO_COLOR=1`. Vite otherwise embeds ANSI colour codes
+> inside its printed URL, which breaks the auto-attach pattern match. The
+> banner is monochrome; Chrome attaching reliably is worth it.
+
+> `.vscode/launch.json`, `tasks.json`, `extensions.json` and `settings.json` are
+> committed so the whole team gets them. `settings.json` deliberately contains no
+> JDK path — the Java extension auto-detects, and an absolute path would be wrong
+> on everyone else's machine.
+
 ## Configuration Reference
 
 ### Files you may need to edit
@@ -271,7 +330,7 @@ No dev proxy is configured or needed — the backend already allows `http://loca
 | File | When | Committed? |
 |---|---|---|
 | `Frontend/.env.local` | Backend on a non-default port | No (gitignored) |
-| `Backend/src/main/resources/application-local.properties` | Your DB password, option B | No (gitignored) |
+| `Backend/src/main/resources/application-local.properties` | **Your DB password and SMTP credentials** — everything personal or secret | No (gitignored) |
 | `Backend/src/main/resources/application.properties` | Changing a setting **for the whole team** | **Yes — never put secrets here** |
 | `Backend/src/test/resources/application.properties` | Test-only config (H2) | Yes |
 
@@ -309,12 +368,43 @@ Do not set `spring.jpa.properties.hibernate.dialect` — Hibernate 7 auto-detect
 
 By default **no email is sent**. With `spring.mail.host` unset, the app logs every message instead. This is deliberate: the whole signup flow can be run and tested with no SMTP credentials, so every team member can work on it and the test suite never mails anyone.
 
-To send real email, uncomment the SMTP block in `application.properties` and supply a **Gmail App Password** — not your Google account password. App Passwords require 2-Step Verification and are created at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+To send real email you need a Gmail address plus a **Google App Password** — a
+16-character code that is *not* your Google login password.
 
-```bash
-export MAIL_USERNAME='you@gmail.com'
-export MAIL_PASSWORD='xxxx xxxx xxxx xxxx'
+**Getting the App Password**
+
+1. Sign in to the personal Google account you want to send from. A
+   `@mycput.ac.za` address will not work — it is a Microsoft mailbox, so Google
+   cannot issue an App Password for it.
+2. Turn on **2-Step Verification** at
+   [myaccount.google.com/security](https://myaccount.google.com/security).
+   App Passwords do not exist until 2FA is on; this is the step people get stuck on.
+3. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords),
+   name it `UniExchange`, and click **Create**.
+4. Copy the 16-character code (four blocks of four). It is shown only once.
+
+If that page says App Passwords are unavailable, it is one of: 2FA still off, a
+Workspace/school account whose admin disabled them, or Advanced Protection on.
+
+**Where to put it — the untracked file, never `application.properties`**
+
+Add these to `Backend/src/main/resources/application-local.properties`. That file
+is gitignored and loads automatically, so nothing secret is ever committed:
+
+```properties
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=you@gmail.com
+spring.mail.password=abcd efgh ijkl mnop
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+app.otp.from=you@gmail.com
 ```
+
+Restart the backend. The `verification emails will be logged, not sent` warning
+disappearing is how you know real SMTP is live. Comment out the `spring.mail.host`
+line to go back to console logging. If the SMTP server is unreachable,
+registration returns a clean `503` rather than failing silently.
 
 Mail from Gmail into a university Microsoft tenant often lands in **Junk** — check there before assuming it failed.
 
