@@ -55,6 +55,12 @@ export type AuthResponse = {
   userId: number
   email: string
   roles: string[]
+  /*
+    Proof this browser completed an OTP, so the next sign-in can skip it.
+    Populated ONLY by /verify-otp - a trusted /login leaves it null, because the
+    browser already holds a valid one. Store it with writeDeviceToken().
+  */
+  deviceToken: string | null
 }
 
 export type RegistrationResponse = {

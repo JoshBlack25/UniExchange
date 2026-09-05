@@ -108,6 +108,7 @@ like one app.
 | `Avatar` | initials in a circle |
 | `Spinner` `EmptyState` | loading and empty states |
 | `Alert` | `error` `success` `info` |
+| `Checkbox` | label sits beside the box; `forwardRef` like the other inputs |
 | `OtpInput` | auth only |
 
 | From `@/components/layout/` | |
@@ -139,7 +140,7 @@ src/
 ├── App.tsx               every route, grouped by owner
 ├── index.css             Tailwind v4 import + design tokens (@theme)
 ├── lib/
-│   ├── session.ts        localStorage session (token + expiry)
+│   ├── session.ts        session + trusted-device token; picks local/sessionStorage
 │   ├── schemas.ts        zod schemas
 │   └── api/
 │       ├── client.ts     request() / authedRequest() / ApiError  — shared
@@ -172,8 +173,35 @@ Defined in `src/index.css`, available as normal Tailwind utilities.
 Icons are hand-written inline SVG (24×24, `fill="none"`, `stroke="currentColor"`,
 `strokeWidth="2"`) — see `components/layout/NavIcons.tsx`. No icon library.
 
-## Session
+## Session and "Remember me"
 
-The JWT lives in `localStorage` with its expiry. The backend issues a **one-hour
-token and has no refresh endpoint**, so an expired token is treated as signed out on
-load, and any `401` clears the session.
+Signing in takes **two steps unless this browser has been trusted before**:
+
+| `POST /api/auth/login` | Status | Body | What to do |
+|---|---|---|---|
+| trusted device | `200` | `AuthResponse` (has `token`) | signed in |
+| everything else | `202` | `RegistrationResponse` (no token) | a code was emailed → `/verify` |
+
+So `authApi.login()` returns `AuthResponse | RegistrationResponse`. Narrow it with
+`'token' in result`. Only `/verify-otp` ever issues a token, and it is also the only
+place a device earns the right to skip the code next time.
+
+The **Remember me** checkbox picks which browser store everything goes into, and that
+choice is the whole mechanism:
+
+| Ticked | Session + device token in | Survives reload | Survives closing the browser |
+|---|---|---|---|
+| yes | `localStorage`, token lasts 30 days | yes | **yes** |
+| no | `sessionStorage`, token lasts 1 hour | yes | **no → code required again** |
+
+`sessionStorage` being wiped when the browser closes *is* the "session was lost"
+trigger — nothing detects it. `lib/session.ts` writes to one store and clears the
+other, so the two can never disagree.
+
+An expired token is treated as signed out on load (there is **no refresh endpoint**),
+and any `401` clears the session. Signing out deliberately keeps the device token:
+remembering a device means "don't ask me for a code here again", not "stay signed in
+forever".
+
+You should not need to touch any of this — `useAuth()` and `authedRequest()` work
+exactly as before.

@@ -54,6 +54,14 @@ export const loginSchema = z.object({
   // Being strict here would block a future faculty or vendor account.
   email: z.string().trim().min(1, 'Enter your email').toLowerCase(),
   password: z.string().min(1, 'Enter your password'),
+  /*
+    "Remember me on this device". Plain z.boolean() with a useForm defaultValue
+    rather than .default(false): in zod v4 a .default() makes the schema's input
+    and output types differ, and zodResolver then infers a LoginValues where the
+    field is optional - which quietly turns `values.rememberMe` into
+    `boolean | undefined` at every call site.
+  */
+  rememberMe: z.boolean(),
 })
 
 export const otpSchema = z.object({

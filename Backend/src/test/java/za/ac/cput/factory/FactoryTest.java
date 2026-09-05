@@ -51,6 +51,7 @@ import za.ac.cput.domain.enums.VerificationType;
 import za.ac.cput.domain.enums.WalletTransactionType;
 import za.ac.cput.domain.identity.Campus;
 import za.ac.cput.domain.identity.Role;
+import za.ac.cput.domain.identity.TrustedDevice;
 import za.ac.cput.domain.identity.User;
 import za.ac.cput.domain.identity.UserRole;
 import za.ac.cput.domain.identity.Verification;
@@ -73,6 +74,7 @@ import za.ac.cput.factory.communication.NotificationFactory;
 import za.ac.cput.factory.community.BulletinPostFactory;
 import za.ac.cput.factory.identity.CampusFactory;
 import za.ac.cput.factory.identity.RoleFactory;
+import za.ac.cput.factory.identity.TrustedDeviceFactory;
 import za.ac.cput.factory.identity.UserFactory;
 import za.ac.cput.factory.identity.UserRoleFactory;
 import za.ac.cput.factory.identity.VerificationFactory;
@@ -208,6 +210,45 @@ class FactoryTest {
         void verificationRejectsMissingExpiry() {
             assertThrows(IllegalArgumentException.class, () -> VerificationFactory.createVerification(
                     1L, VerificationType.EMAIL, "token-abc", null));
+        }
+
+        @Test
+        void trustedDevice() {
+            LocalDateTime expiry = LocalDateTime.now().plusDays(30);
+            TrustedDevice device = TrustedDeviceFactory.createTrustedDevice(
+                    1L, "a".repeat(64), "Mozilla/5.0", true, expiry);
+
+            assertEquals(1L, device.getUserId());
+            assertEquals("a".repeat(64), device.getTokenHash());
+            assertEquals("Mozilla/5.0", device.getLabel());
+            assertTrue(device.isPersistent());
+            assertEquals(expiry, device.getExpiresAt());
+            assertNull(device.getRevokedAt());
+            assertNotNull(device.getCreatedAt());
+        }
+
+        @Test
+        void trustedDeviceRejectsMissingTokenHash() {
+            assertThrows(IllegalArgumentException.class, () -> TrustedDeviceFactory.createTrustedDevice(
+                    1L, "  ", "Mozilla/5.0", true, LocalDateTime.now().plusDays(30)));
+        }
+
+        @Test
+        void trustedDeviceRejectsMissingExpiry() {
+            assertThrows(IllegalArgumentException.class, () -> TrustedDeviceFactory.createTrustedDevice(
+                    1L, "a".repeat(64), "Mozilla/5.0", true, null));
+        }
+
+        @Test
+        void trustedDeviceRevokeKeepsEverythingElse() {
+            TrustedDevice device = TrustedDeviceFactory.createTrustedDevice(
+                    1L, "a".repeat(64), "Mozilla/5.0", true, LocalDateTime.now().plusDays(30));
+
+            TrustedDevice revoked = TrustedDeviceFactory.revoke(device);
+
+            assertNotNull(revoked.getRevokedAt());
+            assertEquals(device.getTokenHash(), revoked.getTokenHash());
+            assertEquals(device.getCreatedAt(), revoked.getCreatedAt());
         }
 
     }
