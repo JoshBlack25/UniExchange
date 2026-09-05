@@ -4,7 +4,7 @@ A campus marketplace platform for buying, selling, and exchanging goods and serv
 
 Unlike Facebook Marketplace or Gumtree, UniExchange is closed to the public: only someone who can prove they hold a `@mycput.ac.za` mailbox can create an account, which is what keeps listings campus-relevant and cuts down on scams.
 
-**Current status:** the backend is fully layered with Spring Security + JWT, and verified-student authentication (signup → email OTP → login) works end to end. The frontend implements those screens, and all remaining pages are scaffolded and routed with an owner assigned to each — the team is filling them in now.
+**Current status:** the backend is fully layered with Spring Security + JWT, and verified-student authentication (signup → email OTP → login) works end to end, with the emailed code acting as a second factor at sign-in and a "Remember me" trusted-device option. The frontend implements those screens, and all remaining pages are scaffolded and routed with an owner assigned to each — the team is filling them in now.
 
 ## Table of Contents
 
@@ -346,6 +346,9 @@ In `Backend/src/main/resources/application.properties`:
 | `spring.jpa.hibernate.ddl-auto` | `update` | Hibernate creates/updates tables on boot |
 | `app.jwt.secret` | `${JWT_SECRET:change-me-...}` | **Must be ≥ 32 bytes** or startup fails |
 | `app.jwt.ttl-seconds` | `3600` | One hour; there is no refresh endpoint |
+| `app.jwt.remembered-ttl-seconds` | `2592000` | 30 days, for a "Remember me" sign-in. A JWT cannot be revoked, so shorten this if that trade is unacceptable |
+| `app.trusted-device.remembered-days` | `30` | How long a remembered browser may skip the OTP. Slides forward on each use |
+| `app.trusted-device.session-hours` | `12` | The same, when "Remember me" was **not** ticked. A hard cap |
 | `app.auth.student-email-pattern` | `^\d{8,10}@mycput\.ac\.za$` | The signup gate |
 | `app.otp.length` | `6` | |
 | `app.otp.ttl-minutes` | `10` | |
@@ -456,12 +459,42 @@ Only verified CPUT students can obtain a token.
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/auth/register` | Creates a `PENDING_VERIFICATION` account and emails a 6-digit code. **Returns 202 with no token.** |
-| `POST /api/auth/verify-otp` | Exchanges a valid code for a JWT and sets the account `ACTIVE`. The only endpoint that issues a token. |
-| `POST /api/auth/resend-otp` | New code, subject to the cooldown. Always 202, so registered student numbers cannot be enumerated. |
-| `POST /api/auth/login` | Email + password. Unverified accounts get `403` with `code: "EMAIL_NOT_VERIFIED"`. |
+| `POST /api/auth/verify-otp` | Exchanges a valid code for a JWT and sets the account `ACTIVE`. The only endpoint that issues a token, and the only one that trusts a device. |
+| `POST /api/auth/resend-otp` | New code, subject to the cooldown. Always 202 for an unknown address, so registered student numbers cannot be enumerated. |
+| `POST /api/auth/login` | Email + password, plus an optional `deviceToken` and `rememberMe`. **Two outcomes** — see below. Unverified accounts still get `403` with `code: "EMAIL_NOT_VERIFIED"`. |
 | `GET /api/auth/me` | The authenticated user (`Authorization: Bearer <token>`). |
 
 Codes are stored only as a BCrypt hash, expire in 10 minutes, and are capped at 5 attempts.
+
+### "Remember me" — the emailed code is a second factor, not just an activation step
+
+The password alone is never enough. Once it checks out, `/login` either recognises the
+browser or emails a code:
+
+| Outcome | Status | Body |
+|---|---|---|
+| trusted device | `200` | `AuthResponse` with a token |
+| anything else | `202` | no token — a code was sent, finish at `/verify-otp` |
+
+A browser earns that trust only by completing an OTP, and `rememberMe` decides how long
+it keeps it:
+
+- **Ticked** — 30 days, sliding forward on each use, and the session itself lasts 30 days.
+  The client keeps both in `localStorage`, so a restart changes nothing.
+- **Not ticked** — 12 hours at most, and the client keeps both in `sessionStorage`, so
+  closing the browser loses them and the next sign-in needs a fresh code.
+
+The device token is an opaque 256-bit value stored only as a SHA-256 hash (not BCrypt —
+a salted hash cannot be looked up, and there is nothing to brute-force in 256 random
+bits). It is bound to one account, so presenting another student's token does not skip
+your code. **It never replaces the password** — it only ever skips the second factor.
+
+Changing your mind is handled: ticking the box on a browser that was trusted for the
+session only re-issues the token into `localStorage` and retires the old one, so the two
+halves cannot drift apart.
+
+> Because a wrong password is rejected before any of this, `/login` can never be used to
+> send someone an unwanted email.
 
 Every other entity has standard CRUD at `/api/<plural-name>` — e.g. `GET /api/listings`, `POST /api/campuses`. `GET` on listings, listing images, categories, campuses and bulletin posts is public; everything else needs a token; audit logs and reports are `ADMIN` only.
 
@@ -512,7 +545,7 @@ bar), so no page writes its own header. Each page is owned by one team member an
 each feature has its own API module — see
 [`Frontend/README.md`](Frontend/README.md) for the ownership table.
 
-The JWT is kept in `localStorage` alongside its expiry. The backend issues a one-hour token and has no refresh endpoint, so an expired token is treated as signed out on load.
+The JWT and the trusted-device token are kept together, in `localStorage` when "Remember me" is ticked and in `sessionStorage` when it is not — which is exactly what makes an unticked sign-in end when the browser closes. There is no refresh endpoint, so an expired token is treated as signed out on load.
 
 ```bash
 npm run dev       # dev server on :5173
@@ -538,6 +571,7 @@ Tests run against **H2 in-memory** using `src/test/resources/application.propert
 | `FactoryTest` | Builds all 22 entities through their factories; asserts each rejects invalid input |
 | `HelperTest` | Validation utilities, including the student-email rule |
 | `OtpServiceTest` | OTP expiry, the attempt cap, single use, and that codes are hashed |
+| `DeviceTrustServiceTest` | "Remember me": tokens are hashed and never logged, are bound to one account, honour expiry and revocation, and only remembered devices get a sliding window |
 
 ### Frontend
 
@@ -557,6 +591,7 @@ npm run build && npm run lint
 | `Access denied for user 'root'@'localhost'` | `DB_PASSWORD` is unset or wrong — see [step 3](#3-configure-your-database-password) |
 | `WeakKeyException` at startup | `app.jwt.secret` is under 32 bytes; set a longer `JWT_SECRET` |
 | No verification email arrives | Expected by default — the code is printed in the backend terminal. For real mail see [Email / OTP Delivery](#email--otp-delivery), and check Junk |
+| Signing in asks for a code every time | Working as designed on a browser that has not been trusted. Tick **Remember me**, or note that without it the trust is dropped when the browser closes. The code is in the backend terminal |
 | Login returns 403 `EMAIL_NOT_VERIFIED` | That account never completed the OTP step. The frontend redirects to `/verify` automatically |
 | Frontend shows "Cannot reach the UniExchange server" | The backend isn't running, or `VITE_API_BASE_URL` is wrong |
 | CORS error in the browser console | Your origin isn't in `app.cors.allowed-origins`. Only the `Authorization` and `Content-Type` request headers are allowed — adding any custom header breaks the preflight |

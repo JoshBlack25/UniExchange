@@ -17,7 +17,12 @@ import type { ReactNode } from 'react'
 import { authApi } from '@/lib/api/auth'
 import { ApiError } from '@/lib/api/client'
 import type { AuthResponse, User } from '@/lib/api/types'
-import { clearStoredSession, readStoredSession, writeStoredSession } from '@/lib/session'
+import {
+  clearStoredSession,
+  readStoredSession,
+  writeDeviceToken,
+  writeStoredSession,
+} from '@/lib/session'
 import type { StoredSession } from '@/lib/session'
 
 import { AuthContext } from './authContext'
@@ -33,15 +38,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
-  const signIn = useCallback((response: AuthResponse) => {
+  const signIn = useCallback((response: AuthResponse, remember: boolean) => {
     const stored: StoredSession = {
       token: response.token,
+      // The backend already sized expiresIn by rememberMe - weeks when ticked,
+      // an hour when not - so this needs no branch of its own.
       expiresAt: Date.now() + response.expiresIn * 1000,
       email: response.email,
       roles: response.roles,
       userId: response.userId,
+      remembered: remember,
     }
-    writeStoredSession(stored)
+    writeStoredSession(stored, remember)
+
+    // Only /verify-otp returns one. A trusted sign-in leaves it null and the
+    // token already in storage stays exactly where it is.
+    if (response.deviceToken) {
+      writeDeviceToken(response.deviceToken, remember)
+    }
+
     setSession(stored)
     setUser(null)
   }, [])

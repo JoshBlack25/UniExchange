@@ -1,11 +1,21 @@
 /*
-  The verification step. This is where an account actually becomes usable:
-  /verify-otp is the only endpoint that issues a token, so a made-up student
-  number stops here permanently.
+  The code step. /verify-otp is the only endpoint that issues a token AND the
+  only one that trusts a device, so everything funnels through here: a made-up
+  student number stops here permanently, and a browser can only skip the code
+  later by having entered one now.
 
-  Reachable three ways - router state from signup, a ?email= query param, or a
-  redirect from login when the account is unverified - so closing the tab does
-  not strand anyone.
+  Two journeys arrive at the same screen:
+    signup            - the code activates a brand-new account.
+    an ordinary login - the account already works, and the code is a second
+                        factor because this browser is not recognised.
+
+  Reachable four ways - router state from signup, router state from login, a
+  ?email= query param, or the unverified-account redirect - so closing the tab
+  does not strand anyone.
+
+  rememberMe rides along in the router state rather than being asked again here:
+  the student already answered it on the sign-in form, and it has to reach
+  signIn() so the new device token lands in the matching store.
 */
 
 import { useEffect, useRef, useState } from 'react'
@@ -22,7 +32,14 @@ import { ApiError } from '@/lib/api/client'
 const CODE_LENGTH = 6
 const RESEND_COOLDOWN_SECONDS = 60
 
-type LocationState = { email?: string; autoResend?: boolean } | null
+type LocationState = {
+  email?: string
+  autoResend?: boolean
+  /** The "Remember me" answer from the sign-in form, if the student came from there. */
+  rememberMe?: boolean
+  /** Where they were originally headed before being sent here. */
+  from?: string
+} | null
 
 export function VerifyOtpPage() {
   const navigate = useNavigate()
@@ -32,6 +49,11 @@ export function VerifyOtpPage() {
 
   const state = location.state as LocationState
   const email = (state?.email ?? searchParams.get('email') ?? '').toLowerCase()
+
+  // Signup has no checkbox - a brand-new account is a brand-new device by
+  // definition - so false is the right default for everything but a login.
+  const rememberMe = state?.rememberMe ?? false
+  const destination = state?.from ?? '/feed'
 
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -56,9 +78,11 @@ export function VerifyOtpPage() {
     setError(null)
     setNotice(null)
     try {
-      const response = await authApi.verifyOtp({ email, code: submittedCode })
-      signIn(response)
-      navigate('/feed', { replace: true })
+      const response = await authApi.verifyOtp({ email, code: submittedCode, rememberMe })
+      // signIn also persists response.deviceToken, which is what lets the next
+      // sign-in from this browser skip the code entirely.
+      signIn(response, rememberMe)
+      navigate(destination, { replace: true })
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Could not verify that code.')
       setCode('')
@@ -113,6 +137,7 @@ export function VerifyOtpPage() {
         <>
           We sent a {CODE_LENGTH}-digit code to <span className="font-medium text-ink-700">{email}</span>.
           It expires in 10 minutes.
+          {rememberMe && ' We will remember this device, so this is the last time you will need one here.'}
         </>
       }
       footer={

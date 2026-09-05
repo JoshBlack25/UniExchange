@@ -19,7 +19,14 @@ export type AuthContextValue = {
   user: User | null
   loadingUser: boolean
   isAuthenticated: boolean
-  signIn: (response: AuthResponse) => void
+  /**
+   * Stores the session. `remember` is the "Remember me" checkbox and decides
+   * which browser store everything lands in - localStorage when ticked,
+   * sessionStorage when not - so closing the browser signs an unticked student
+   * out and brings the OTP back. It also persists response.deviceToken when the
+   * backend just issued one.
+   */
+  signIn: (response: AuthResponse, remember: boolean) => void
   signOut: () => void
 }
 

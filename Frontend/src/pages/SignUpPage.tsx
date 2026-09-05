@@ -57,7 +57,13 @@ export function SignUpPage() {
         campusId: values.campusId ? Number(values.campusId) : null,
       })
 
-      navigate('/verify', { replace: true, state: { email: values.email } })
+      // rememberMe is false on purpose: a brand-new account is a brand-new
+      // device, and there is no checkbox to answer it here. The student can tick
+      // it on their next sign-in.
+      navigate('/verify', {
+        replace: true,
+        state: { email: values.email, rememberMe: false },
+      })
     } catch (error) {
       if (error instanceof ApiError) {
         // Map the backend's per-field messages onto the matching inputs.
