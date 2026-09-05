@@ -15,16 +15,16 @@
   The signed-in student's campus (useAuth().user?.campusId) is the default
   campus filter - that is the whole "hyper-local" point of the product.
 
-  Components used only by this page live in src/components/feed/components/.
+  Components used only by this page live in src/components/feed/.
 */
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/auth/useAuth'
-import { CategoryChips } from '@/components/feed/components/CategoryChips'
-import { FeedSidebar } from '@/components/feed/components/FeedSidebar'
-import { ListingGrid } from '@/components/feed/components/ListingGrid'
+import { CategoryChips } from '@/components/feed/CategoryChips'
+import { FeedSidebar } from '@/components/feed/FeedSidebar'
+import { ListingGrid } from '@/components/feed/ListingGrid'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
