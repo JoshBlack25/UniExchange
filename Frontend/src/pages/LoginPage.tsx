@@ -12,11 +12,12 @@ import { useForm } from 'react-hook-form'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/auth/useAuth'
-import { Alert } from '@/components/Alert'
-import { AuthLayout } from '@/components/AuthLayout'
-import { Button } from '@/components/Button'
-import { TextField } from '@/components/TextField'
-import { api, ApiError } from '@/lib/api'
+import { Alert } from '@/components/ui/Alert'
+import { AuthLayout } from '@/components/layout/AuthLayout'
+import { Button } from '@/components/ui/Button'
+import { TextField } from '@/components/ui/TextField'
+import { authApi } from '@/lib/api/auth'
+import { ApiError } from '@/lib/api/client'
 import { loginSchema } from '@/lib/schemas'
 import type { LoginValues } from '@/lib/schemas'
 
@@ -32,12 +33,12 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({ resolver: zodResolver(loginSchema) })
 
-  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
+  const from = (location.state as { from?: string } | null)?.from ?? '/feed'
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null)
     try {
-      signIn(await api.login(values))
+      signIn(await authApi.login(values))
       navigate(from, { replace: true })
     } catch (error) {
       if (error instanceof ApiError && error.isUnverified) {

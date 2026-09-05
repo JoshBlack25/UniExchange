@@ -4,7 +4,7 @@ A campus marketplace platform for buying, selling, and exchanging goods and serv
 
 Unlike Facebook Marketplace or Gumtree, UniExchange is closed to the public: only someone who can prove they hold a `@mycput.ac.za` mailbox can create an account, which is what keeps listings campus-relevant and cuts down on scams.
 
-**Current status:** the backend is fully layered with Spring Security + JWT, and verified-student authentication (signup → email OTP → login) works end to end. The frontend implements those three screens plus a placeholder dashboard. Marketplace features are next.
+**Current status:** the backend is fully layered with Spring Security + JWT, and verified-student authentication (signup → email OTP → login) works end to end. The frontend implements those screens, and all remaining pages are scaffolded and routed with an owner assigned to each — the team is filling them in now.
 
 ## Table of Contents
 
@@ -53,10 +53,10 @@ Unlike Facebook Marketplace or Gumtree, UniExchange is closed to the public: onl
 | Routing        | react-router-dom 7                                            |
 | Styling        | Tailwind CSS v4 (CSS-first config, no `tailwind.config.js`)   |
 | Forms          | react-hook-form 7 + zod 4 (`@hookform/resolvers`)             |
-| HTTP           | native `fetch`, wrapped in `src/lib/api.ts`                   |
+| HTTP           | native `fetch`, wrapped in `src/lib/api/`                      |
 | Linting        | ESLint 10 (flat config) + typescript-eslint                   |
 
-No component library and no HTTP client dependency — the API surface is small enough that `fetch` behind one wrapper is enough.
+No component library and no HTTP client dependency — the API surface is small enough that `fetch` behind one client is enough. `lib/api/` is split one module per feature so team members do not collide in a single file.
 
 ## Project Structure
 
@@ -275,7 +275,7 @@ No dev proxy is configured or needed — the backend already allows `http://loca
        429183
    ```
 
-4. Type or paste those 6 digits → you are signed in and land on the dashboard.
+4. Type or paste those 6 digits → you are signed in and land on the feed.
 
 ---
 
@@ -486,15 +486,31 @@ See [`Frontend/README.md`](Frontend/README.md) for the full frontend guide.
 ```
 Frontend/src/
 ├── main.tsx              BrowserRouter + AuthProvider
-├── App.tsx               route table
+├── App.tsx               every route, grouped by owner
 ├── index.css             Tailwind import + design tokens (@theme)
-├── lib/                  api.ts (the only module that knows the backend), schemas.ts (zod)
-├── auth/                 authContext.ts, AuthProvider.tsx, useAuth.ts, ProtectedRoute.tsx
-├── components/           AuthLayout, Button, TextField, OtpInput, Alert, Logo
-└── pages/                SignUpPage, VerifyOtpPage, LoginPage, DashboardPage
+├── lib/
+│   ├── session.ts        localStorage session (token + expiry)
+│   ├── schemas.ts        zod schemas
+│   └── api/              client.ts + types.ts, then one module per feature
+│                         (auth, listings, users, messages, notifications, bulletin)
+├── auth/                 authContext, AuthProvider, useAuth, ProtectedRoute
+├── components/
+│   ├── ui/               Button, TextField, Textarea, Select, Card, Badge,
+│   │                     Avatar, Spinner, EmptyState, Alert, OtpInput
+│   ├── layout/           AppLayout, TopBar, BottomNav, PageHeader, AuthLayout, Logo
+│   └── feed/ listings/ profile/ messages/ notifications/ bulletin/
+└── pages/                one file per route
 ```
 
-Routes: `/` redirects by auth state · `/signup` · `/verify` · `/login` · `/dashboard` (protected).
+Routes: `/` redirects by auth state · `/login` `/signup` `/verify` (public) ·
+`/feed` `/listings/new` `/listings/:listingId` `/profile` `/profile/:userId`
+`/notifications` `/messages` `/messages/:conversationId` `/bulletin` (protected) ·
+anything else shows a 404 page.
+
+Every signed-in route renders inside a shared `AppLayout` (top bar + mobile tab
+bar), so no page writes its own header. Each page is owned by one team member and
+each feature has its own API module — see
+[`Frontend/README.md`](Frontend/README.md) for the ownership table.
 
 The JWT is kept in `localStorage` alongside its expiry. The backend issues a one-hour token and has no refresh endpoint, so an expired token is treated as signed out on load.
 
@@ -578,7 +594,7 @@ auto-detects the dialect from the live connection, which is why
 ## Roadmap
 
 1. **Done** — full backend layering (`domain → repository → factory → service → controller`), Spring Security + JWT, and verified-student auth with email OTP.
-2. **Done** — frontend signup, OTP verification and login (React 19 + TypeScript + Tailwind v4 + react-router 7).
-3. **Next** — marketplace slices: listings, categories, campus filters, listing images.
+2. **Done** — frontend signup, OTP verification and login (React 19 + TypeScript + Tailwind v4 + react-router 7), plus the shared app shell and a routed, owner-assigned stub for every remaining page.
+3. **In progress** — the team building out feed, product details, create listing, profile, notifications, messaging and the bulletin board.
 4. **Then** — messaging, wallet, reviews and trusted-seller badges, campus bulletin board.
 5. **Later** — Swagger/OpenAPI docs (springdoc 3.x, already a commented-out placeholder in `pom.xml`); authenticator-app TOTP as a login second factor; optional "Sign in with Microsoft" via Entra ID.

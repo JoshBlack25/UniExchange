@@ -9,12 +9,13 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 
-import { Alert } from '@/components/Alert'
-import { AuthLayout } from '@/components/AuthLayout'
-import { Button } from '@/components/Button'
-import { TextField } from '@/components/TextField'
-import { api, ApiError } from '@/lib/api'
-import type { Campus } from '@/lib/api'
+import { Alert } from '@/components/ui/Alert'
+import { AuthLayout } from '@/components/layout/AuthLayout'
+import { Button } from '@/components/ui/Button'
+import { TextField } from '@/components/ui/TextField'
+import { authApi } from '@/lib/api/auth'
+import { ApiError } from '@/lib/api/client'
+import type { Campus } from '@/lib/api/types'
 import { signUpSchema } from '@/lib/schemas'
 import type { SignUpValues } from '@/lib/schemas'
 
@@ -34,7 +35,7 @@ export function SignUpPage() {
   // A failure here is not worth blocking signup over - campus is optional.
   useEffect(() => {
     let cancelled = false
-    api
+    authApi
       .campuses()
       .then((list) => {
         if (!cancelled) setCampuses(list)
@@ -48,7 +49,7 @@ export function SignUpPage() {
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null)
     try {
-      await api.register({
+      await authApi.register({
         email: values.email,
         firstName: values.firstName,
         lastName: values.lastName,
