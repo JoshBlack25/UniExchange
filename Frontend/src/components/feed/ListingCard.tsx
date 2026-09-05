@@ -4,9 +4,14 @@
   Image area is a placeholder for v1; per-listing images cost one request per
   card, which we add in v1.5. The whole card is a link to the product page.
 
+  Micro-interactions kept subtle: a hover lift on the card and a gentle zoom
+  on the image tile. New listings (< 24h) and sold ones get a status badge
+  overlay, matching the mockup's badge language.
+
   Owner: Joshua Reid Adams (230317693)
 */
 
+import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import type { Listing } from '@/lib/api/types'
 
@@ -17,6 +22,9 @@ type ListingCardProps = {
 }
 
 const zar = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' })
+const DAY_MS = 24 * 60 * 60 * 1000
+/* Evaluated once per page load - render stays pure (react-hooks/purity). */
+const NOW_MS = Date.now()
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
@@ -33,21 +41,39 @@ function timeAgo(iso: string): string {
 }
 
 export function ListingCard({ listing, campusName }: ListingCardProps) {
+  const isNew = NOW_MS - new Date(listing.createdAt).getTime() < DAY_MS
+  const isSold = listing.status === 'SOLD'
+
   return (
-    <Card to={`/listings/${listing.listingId}`} className="flex h-full flex-col gap-2 p-3">
-      <div className="flex aspect-[4/3] items-center justify-center rounded-xl bg-gray-100 text-gray-400">
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className="size-10"
-        >
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          <circle cx="9" cy="10" r="1.5" />
-          <path d="m5 18 4.5-5 3 3.5L15 13l4 5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+    <Card
+      to={`/listings/${listing.listingId}`}
+      className="group flex h-full flex-col gap-2 p-3 transition-all hover:-translate-y-0.5 hover:shadow-md"
+    >
+      <div className="relative overflow-hidden rounded-xl bg-gray-100">
+        <div className="flex aspect-[4/3] items-center justify-center text-gray-400 transition-transform duration-300 group-hover:scale-105">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            className="size-10"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <circle cx="9" cy="10" r="1.5" />
+            <path d="m5 18 4.5-5 3 3.5L15 13l4 5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+
+        {isSold ? (
+          <span className="absolute left-2 top-2">
+            <Badge tone="neutral">SOLD</Badge>
+          </span>
+        ) : isNew ? (
+          <span className="absolute left-2 top-2">
+            <Badge tone="success">Just listed</Badge>
+          </span>
+        ) : null}
       </div>
 
       <h3 className="line-clamp-2 text-sm font-semibold text-ink-900">{listing.title}</h3>

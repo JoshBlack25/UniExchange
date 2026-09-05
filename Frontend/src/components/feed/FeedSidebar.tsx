@@ -1,6 +1,7 @@
 /*
   FeedSidebar - the desktop left rail from the T2 desktop mockup: a Sell Item
-  button and the Categories list with counts ("All Categories 342").
+  button and the Categories list with counts ("All Categories 342"), each row
+  with its category icon.
 
   Counts are ACTIVE listings per category, computed once in FeedPage from a
   single GET /api/listings call. Hidden below `lg` - mobile uses CategoryChips.
@@ -10,6 +11,7 @@
 
 import { useNavigate } from 'react-router-dom'
 
+import { CategoryIcon } from './CategoryIcon'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import type { Category } from '@/lib/api/types'
@@ -57,7 +59,23 @@ export function FeedSidebar({
                 aria-pressed={activeCategoryId === null}
                 className={`${row} ${activeCategoryId === null ? rowActive : rowIdle}`}
               >
-                <span>All Categories</span>
+                <span className="flex items-center gap-2">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    className="size-4"
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                  All Categories
+                </span>
                 <span className="text-xs text-ink-400">{totalActive}</span>
               </button>
             </li>
@@ -70,7 +88,10 @@ export function FeedSidebar({
                   aria-pressed={activeCategoryId === category.categoryId}
                   className={`${row} ${activeCategoryId === category.categoryId ? rowActive : rowIdle}`}
                 >
-                  <span className="truncate">{category.name}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <CategoryIcon name={category.name} className="size-4 shrink-0" />
+                    <span className="truncate">{category.name}</span>
+                  </span>
                   <span className="text-xs text-ink-400">{counts[category.categoryId] ?? 0}</span>
                 </button>
               </li>

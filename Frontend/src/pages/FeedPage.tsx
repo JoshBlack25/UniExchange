@@ -15,28 +15,48 @@
   The signed-in student's campus (useAuth().user?.campusId) is the default
   campus filter - that is the whole "hyper-local" point of the product.
 
+  UX details (borrowed patterns: Preline skeleton loading, Origin UI filter
+  pills, standard sort control):
+   - skeleton grid on first load instead of a spinner
+   - previous results stay visible (dimmed) while filters refetch
+   - sort control: newest / price up / price down, applied client-side
+   - active-filter pills in a result toolbar, each individually removable
+   - search box has an inline clear button
+
   Components used only by this page live in src/components/feed/.
 */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/auth/useAuth'
+import { ActiveFilters } from '@/components/feed/ActiveFilters'
 import { CategoryChips } from '@/components/feed/CategoryChips'
 import { FeedSidebar } from '@/components/feed/FeedSidebar'
+import { ListingCardSkeleton } from '@/components/feed/ListingCardSkeleton'
 import { ListingGrid } from '@/components/feed/ListingGrid'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
-import { EmptyState } from '@/components/ui/EmptyState'
 import { Select } from '@/components/ui/Select'
-import { Spinner } from '@/components/ui/Spinner'
 import { TextField } from '@/components/ui/TextField'
 import { authApi } from '@/lib/api/auth'
 import { listingsApi } from '@/lib/api/listings'
 import type { Campus, Category, Listing } from '@/lib/api/types'
 
 const SEARCH_DEBOUNCE_MS = 350
+
+type SortKey = 'newest' | 'priceAsc' | 'priceDesc'
+
+const SORTERS: Record<SortKey, (a: Listing, b: Listing) => number> = {
+  newest: (a, b) => b.createdAt.localeCompare(a.createdAt),
+  priceAsc: (a, b) => a.price - b.price,
+  priceDesc: (a, b) => b.price - a.price,
+}
+
+/* Decorative dot-grid backdrop for the empty state (Pattern Craft style). */
+const DOT_GRID =
+  'bg-[radial-gradient(circle,_theme(colors.brand.200)_1px,_transparent_1px)] [background-size:16px_16px]'
 
 export function FeedPage() {
   const { user } = useAuth()
@@ -52,11 +72,12 @@ export function FeedPage() {
   const [categoryId, setCategoryId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [title, setTitle] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('newest')
 
   /*
     Results. `listings` stays null until the first successful response arrives;
     while later requests are in flight the previous grid stays up (stale-while-
-    revalidate) instead of flashing a spinner on every filter change.
+    revalidate, dimmed) instead of flashing a spinner on every filter change.
   */
   const [listings, setListings] = useState<Listing[] | null>(null)
   const [firstLoadDone, setFirstLoadDone] = useState(false)
@@ -119,9 +140,7 @@ export function FeedPage() {
       })
       .then((results) => {
         if (cancelled) return
-        // The T2 doc promises "the latest listings" - newest first.
-        const newestFirst = [...results].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        setListings(newestFirst)
+        setListings(results)
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -138,7 +157,26 @@ export function FeedPage() {
   const campusNames: Record<number, string> = {}
   for (const campus of campuses) campusNames[campus.campusId] = campus.name
 
-  const totalActive = Object.values(counts).reduce((sum, count) => sum + count, 0)
+  const totalActive = useMemo(
+    () => Object.values(counts).reduce((sum, count) => sum + count, 0),
+    [counts],
+  )
+
+  // Sorting is client-side: search already returned every matching ACTIVE row.
+  const sortedListings = useMemo(() => {
+    if (!listings) return null
+    return [...listings].sort(SORTERS[sortKey])
+  }, [listings, sortKey])
+
+  const activeCampusName = campusId !== null ? campusNames[campusId] : undefined
+  const activeCategoryName = categories.find((c) => c.categoryId === categoryId)?.name
+
+  function clearAllFilters() {
+    setCampusId(null)
+    setCategoryId(null)
+    setSearchInput('')
+    setTitle('')
+  }
 
   return (
     <>
@@ -171,29 +209,65 @@ export function FeedPage() {
         <div className="min-w-0 flex-1">
           {/* The desktop mockup keeps search in the top bar; that area is the
               shared layout, so ours lives in the page like the mobile mockup. */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField
-              label="Search"
-              name="feedSearch"
-              placeholder="Search textbooks, electronics…"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-            />
-            <Select
-              label="Campus"
-              name="feedCampus"
-              value={campusId ?? ''}
-              onChange={(event) =>
-                setCampusId(event.target.value === '' ? null : Number(event.target.value))
-              }
-            >
-              <option value="">All campuses</option>
-              {campuses.map((campus) => (
-                <option key={campus.campusId} value={campus.campusId}>
-                  {campus.name}
-                </option>
-              ))}
-            </Select>
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <div className="relative">
+              <TextField
+                label="Search"
+                name="feedSearch"
+                placeholder="Search textbooks, electronics…"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput('')}
+                  aria-label="Clear search"
+                  className="absolute right-2.5 top-[38px] text-ink-400 hover:text-ink-700"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    className="size-4"
+                  >
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[10rem_9rem]">
+              <Select
+                label="Campus"
+                name="feedCampus"
+                value={campusId ?? ''}
+                onChange={(event) =>
+                  setCampusId(event.target.value === '' ? null : Number(event.target.value))
+                }
+              >
+                <option value="">All campuses</option>
+                {campuses.map((campus) => (
+                  <option key={campus.campusId} value={campus.campusId}>
+                    {campus.name}
+                  </option>
+                ))}
+              </Select>
+
+              <Select
+                label="Sort"
+                name="feedSort"
+                value={sortKey}
+                onChange={(event) => setSortKey(event.target.value as SortKey)}
+              >
+                <option value="newest">Newest</option>
+                <option value="priceAsc">Price: low to high</option>
+                <option value="priceDesc">Price: high to low</option>
+              </Select>
+            </div>
           </div>
 
           <div className="mt-3">
@@ -204,19 +278,46 @@ export function FeedPage() {
             />
           </div>
 
+          {firstLoadDone && !error && sortedListings && (
+            <div className="mt-4">
+              <ActiveFilters
+                resultCount={sortedListings.length}
+                campusName={activeCampusName}
+                categoryName={activeCategoryName}
+                search={title || undefined}
+                onClearCampus={() => setCampusId(null)}
+                onClearCategory={() => setCategoryId(null)}
+                onClearSearch={() => setSearchInput('')}
+                onClearAll={clearAllFilters}
+              />
+            </div>
+          )}
+
           <div className="mt-4">
             {!firstLoadDone ? (
-              <div className="flex justify-center py-16">
-                <Spinner label="Loading listings" />
+              /* First load: skeleton grid, same shape as the real cards. */
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }, (_, index) => (
+                  <ListingCardSkeleton key={index} />
+                ))}
               </div>
-            ) : error ? null : listings === null || listings.length === 0 ? (
-              <EmptyState
-                title="Nothing for sale here yet"
-                description="No active listings match these filters. Try another campus or category - or be the first to sell."
-                action={<Button onClick={() => navigate('/listings/new')}>Sell something</Button>}
-              />
+            ) : error ? null : sortedListings === null || sortedListings.length === 0 ? (
+              <div className={`${DOT_GRID} rounded-2xl p-1`}>
+                <div className="rounded-xl bg-white/80 backdrop-blur-[1px]">
+                  <div className="p-8 text-center">
+                    <p className="text-sm font-medium text-ink-700">Nothing for sale here yet</p>
+                    <p className="mx-auto mt-1.5 max-w-sm text-sm text-ink-500">
+                      No active listings match these filters. Try another campus or category - or
+                      be the first to sell.
+                    </p>
+                    <div className="mt-4 flex justify-center">
+                      <Button onClick={() => navigate('/listings/new')}>Sell something</Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : (
-              <ListingGrid listings={listings} campusNames={campusNames} />
+              <ListingGrid listings={sortedListings} campusNames={campusNames} />
             )}
           </div>
         </div>
