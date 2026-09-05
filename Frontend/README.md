@@ -2,83 +2,178 @@
 
 React + TypeScript + Vite client for the UniExchange campus marketplace.
 
-Currently implemented: **signup → email OTP verification → login**, plus a placeholder
-dashboard. The marketplace itself is the next milestone.
+Auth is finished. Every other page is **scaffolded and routed** — the file exists,
+the route works, and the top of each file lists the exact endpoints to call. Pick
+up your page and write the UI.
 
-## Stack
+## Who owns what
 
-| Concern | Choice |
-|---|---|
-| Framework | React 19 |
-| Language | TypeScript 6 |
-| Build | Vite 8 |
-| Routing | react-router-dom 7 |
-| Styling | Tailwind CSS v4 (configured in `src/index.css`, no `tailwind.config.js`) |
-| Forms | react-hook-form + zod 4 (`@hookform/resolvers`) |
-| HTTP | native `fetch`, wrapped in `src/lib/api.ts` |
+| Page | Owner | Route | File | API module |
+|---|---|---|---|---|
+| Login / Signup / Verify | Yaseen Kannemeyer (240453182) | `/login` `/signup` `/verify` | `pages/LoginPage.tsx` etc. | `lib/api/auth.ts` |
+| Homepage feed | **Joshua Reid Adams** (230317693) | `/feed` | `pages/FeedPage.tsx` | `lib/api/listings.ts` |
+| Product details | **Aidan Barends** (230255639) | `/listings/:listingId` | `pages/ListingDetailsPage.tsx` | `lib/api/listings.ts` |
+| Create listing | **Mogamat Wazeer Gilbert** (221374698) | `/listings/new` | `pages/CreateListingPage.tsx` | `lib/api/listings.ts` |
+| User profile | **Raul Ja'aim Everts** (230270565) | `/profile`, `/profile/:userId` | `pages/ProfilePage.tsx` | `lib/api/users.ts` |
+| Notifications | *unassigned* | `/notifications` | `pages/NotificationsPage.tsx` | `lib/api/notifications.ts` |
+| Message chat | *unassigned* | `/messages`, `/messages/:conversationId` | `pages/MessagesPage.tsx`, `pages/ChatPage.tsx` | `lib/api/messages.ts` |
+| Campus bulletin | *unassigned* | `/bulletin` | `pages/BulletinPage.tsx` | `lib/api/bulletin.ts` |
+
+Each owner also has `src/components/<feature>/` for components only their page uses.
 
 ## Getting started
 
 ```bash
 npm install
-cp .env.example .env.local     # then edit if your backend is not on :8080
+cp .env.example .env.local     # only needed if the backend is not on :8080
 npm run dev                    # http://localhost:5173
 ```
 
-The Spring Boot backend must be running on the URL in `VITE_API_BASE_URL`
-(default `http://localhost:8080`). No dev proxy is configured or needed —
-the backend already allows `http://localhost:5173` as a CORS origin.
+The Spring Boot backend must be running (see the root README). Or in VS Code, press
+`F5` with **Full Stack: Backend + Frontend** selected and both start together.
 
 ```bash
-npm run build      # type-checks and bundles to dist/
+npm run build      # production bundle
 npm run lint
-npx tsc -b         # type-check only
+npx tsc -b         # type-check
 ```
+
+## How to build your page
+
+Everything below already exists. You should not need to touch anyone else's files.
+
+**1. Your page renders content only.** The header, navigation and sign-out button
+come from `AppLayout`, which wraps every signed-in route. Start with `PageHeader`:
+
+```tsx
+import { PageHeader } from '@/components/layout/PageHeader'
+
+export function FeedPage() {
+  return (
+    <>
+      <PageHeader title="Feed" subtitle="What's for sale on your campus" />
+      {/* your content */}
+    </>
+  )
+}
+```
+
+**2. Call the backend through your API module**, never `fetch` directly. Auth is
+attached for you:
+
+```tsx
+import { listingsApi } from '@/lib/api/listings'
+import { ApiError } from '@/lib/api/client'
+
+const listings = await listingsApi.list()
+```
+
+`authedRequest` reads the token from the stored session, so you never pass it in.
+Add new endpoints to *your* module in `src/lib/api/` — that is the whole point of
+the split, so five people are not editing one file.
+
+**3. Fetch in an effect, StrictMode-safe.** Copy this shape; effects run twice in
+development and this is what stops the double-set:
+
+```tsx
+useEffect(() => {
+  let cancelled = false
+  listingsApi
+    .list()
+    .then((data) => { if (!cancelled) setListings(data) })
+    .catch((error: unknown) => {
+      if (!cancelled) setError(error instanceof ApiError ? error.message : 'Something went wrong.')
+    })
+  return () => { cancelled = true }
+}, [])
+```
+
+**4. Who is signed in:** `useAuth()` gives you `user` (full profile), `session`
+(`userId`, `email`, `roles`) and `signOut`. No request needed.
+
+**5. Forms:** react-hook-form + zod. Copy `SignUpPage.tsx`, and put your schema in
+`src/lib/schemas.ts` next to the existing ones.
+
+## Shared components
+
+Use these rather than writing your own — that is what keeps the seven pages looking
+like one app.
+
+| From `@/components/ui/` | |
+|---|---|
+| `Button` | full width by default; `className="w-auto px-3"` for inline |
+| `TextField` `Textarea` `Select` | form inputs, all `forwardRef` so `{...register()}` works |
+| `Card` | white panel; pass `to="/path"` to make the whole card a link |
+| `Badge` | status pill — `neutral` `brand` `success` `warning` `danger` |
+| `Avatar` | initials in a circle |
+| `Spinner` `EmptyState` | loading and empty states |
+| `Alert` | `error` `success` `info` |
+| `OtpInput` | auth only |
+
+| From `@/components/layout/` | |
+|---|---|
+| `PageHeader` | title + subtitle + optional action, top of every page |
+| `AppLayout` `TopBar` `BottomNav` | the shell — mounted once in `App.tsx`, don't import these |
+| `AuthLayout` `Logo` | auth screens and the wordmark |
+
+Add a destination to the nav by editing `components/layout/navigation.ts` — the
+mobile tab bar and desktop nav both read from it, so they can never drift apart.
+
+## Two backend gotchas
+
+**Booleans are renamed on the way out.** The entities declare `isPrimary`, `isRead`
+and `isFacultyAnnouncement`, but their Java getters are `isPrimary()` etc. and
+Jackson strips the `is`. So you **send** `{ "isPrimary": true }` and **read back**
+`{ "primary": true }`. The types in `lib/api/types.ts` use the response names. If a
+boolean comes back `undefined`, this is why.
+
+**Foreign keys are plain numbers.** There are no JPA relationships in the domain, so
+a `Listing` gives you `sellerId`, not a nested `seller` object. Fetch related
+records separately.
 
 ## Layout
 
 ```
 src/
 ├── main.tsx              BrowserRouter + AuthProvider
-├── App.tsx               route table
-├── index.css             Tailwind import + design tokens (@theme)
+├── App.tsx               every route, grouped by owner
+├── index.css             Tailwind v4 import + design tokens (@theme)
 ├── lib/
-│   ├── api.ts            the only module that knows the backend exists
-│   └── schemas.ts        zod schemas, incl. the student-email rule
-├── auth/
-│   ├── authContext.ts    context + types (component-free, keeps HMR working)
-│   ├── AuthProvider.tsx  session state, localStorage, token expiry
-│   ├── useAuth.ts
-│   └── ProtectedRoute.tsx
-├── components/           AuthLayout, Button, TextField, OtpInput, Alert, Logo
-└── pages/                SignUpPage, VerifyOtpPage, LoginPage, DashboardPage
+│   ├── session.ts        localStorage session (token + expiry)
+│   ├── schemas.ts        zod schemas
+│   └── api/
+│       ├── client.ts     request() / authedRequest() / ApiError  — shared
+│       ├── types.ts      response shapes                          — shared
+│       └── auth.ts listings.ts users.ts messages.ts notifications.ts bulletin.ts
+├── auth/                 authContext, AuthProvider, useAuth, ProtectedRoute
+├── components/
+│   ├── ui/               shared primitives
+│   ├── layout/           app shell + navigation
+│   └── feed/ listings/ profile/ messages/ notifications/ bulletin/   per owner
+└── pages/                one file per route
 ```
 
-Routes: `/` redirects by auth state · `/signup` · `/verify` · `/login` ·
-`/dashboard` (protected).
+Routes: `/` redirects by auth state · `/login` `/signup` `/verify` (public) ·
+`/feed` `/listings/new` `/listings/:listingId` `/profile` `/profile/:userId`
+`/notifications` `/messages` `/messages/:conversationId` `/bulletin` (protected) ·
+anything else shows the 404 page.
 
-## Auth flow
+## Design tokens
 
-1. **Signup** posts to `/api/auth/register`, which returns **202 and no token** —
-   the account is inert until verified. The app navigates to `/verify`.
-2. **Verify** posts the 6-digit code to `/api/auth/verify-otp`. That is the only
-   endpoint that issues a JWT, so an unverifiable address can never obtain one.
-3. **Login** posts to `/api/auth/login`. An unverified account comes back as
-   `403 EMAIL_NOT_VERIFIED`, which the app treats as a redirect to `/verify`
-   (with an automatic resend) rather than an error.
+Defined in `src/index.css`, available as normal Tailwind utilities.
 
-The token lives in `localStorage` alongside its expiry. The backend issues a
-one-hour token and has **no refresh endpoint**, so an expired token is treated as
-signed out on load.
+- **Brand** `brand-50` … `brand-900` (teal/blue). `brand-600` is the primary.
+- **Ink** — **only** `ink-400` `ink-500` `ink-700` `ink-900` exist. `ink-600` and
+  friends silently produce no style.
+- Everything else is stock Tailwind. Stick to `gray-200` borders, `gray-300` inputs,
+  `red-*` errors, `emerald-*` success, `amber-*` warning.
+- Shapes: `rounded-lg` inputs/buttons, `rounded-xl` small cards, `rounded-2xl` panels.
 
-## Things worth knowing
+Icons are hand-written inline SVG (24×24, `fill="none"`, `stroke="currentColor"`,
+`strokeWidth="2"`) — see `components/layout/NavIcons.tsx`. No icon library.
 
-- **Student email rule.** `VITE_STUDENT_EMAIL_PATTERN` mirrors the backend's
-  `app.auth.student-email-pattern`, defaulting to `^\d{8,10}@mycput\.ac\.za$`.
-  It is loose on digit count on purpose: CPUT publishes no student-number length,
-  and a gate one digit too strict locks real students out. The domain is what is
-  enforced strictly — the emailed code is what actually proves the mailbox exists.
-- **CORS is narrow.** The backend allows only the `Authorization` and
-  `Content-Type` request headers. Adding any custom header makes the preflight
-  fail with no useful console error.
-- **`.env.local` is gitignored**; `.env.example` is the template to copy.
+## Session
+
+The JWT lives in `localStorage` with its expiry. The backend issues a **one-hour
+token and has no refresh endpoint**, so an expired token is treated as signed out on
+load, and any `401` clears the session.

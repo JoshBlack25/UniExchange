@@ -1,5 +1,10 @@
 /*
-  The single place that knows how to talk to the Spring Boot API.
+  The one place that knows how to speak HTTP to the Spring Boot API.
+
+  Feature modules in this folder (listings.ts, messages.ts, ...) build on
+  request() and authedRequest(). Pages must NOT call fetch directly - keeping
+  every call behind a typed function is what makes the backend contract
+  greppable in one folder.
 
   Two constraints from the backend's SecurityConfig worth remembering:
    - CORS allows ONLY the Authorization and Content-Type request headers.
@@ -7,9 +12,15 @@
      preflight fail with no useful error in the console.
    - Auth is a stateless bearer token. The backend reads no cookies, so
      credentials are never sent.
+
+  Author: Mogamat Yaseen Kannemeyer 240453182
 */
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080').replace(/\/+$/, '')
+import { currentToken } from '@/lib/session'
+
+export const BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+).replace(/\/+$/, '')
 
 /** Shape of the backend's GlobalExceptionHandler envelope. */
 type ErrorEnvelope = {
@@ -42,56 +53,26 @@ export class ApiError extends Error {
   }
 }
 
-export type AuthResponse = {
-  token: string
-  tokenType: string
-  expiresIn: number
-  userId: number
-  email: string
-  roles: string[]
-}
-
-export type RegistrationResponse = {
-  email: string
-  message: string
-  codeExpiresInSeconds: number
-}
-
-export type User = {
-  userId: number
-  email: string
-  firstName: string
-  middleName: string | null
-  lastName: string
-  cellPhone: string | null
-  dateOfBirth: string | null
-  accountStatus: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED'
-  emailVerifiedAt: string | null
-  campusId: number | null
-  createdAt: string
-  updatedAt: string
-}
-
-export type Campus = {
-  campusId: number
-  name: string
-  city: string
-  address: string | null
-}
-
-type RequestOptions = {
+export type RequestOptions = {
   method?: string
   body?: unknown
   token?: string | null
+  /** Extra query string values. Undefined and null entries are dropped. */
+  query?: Record<string, string | number | boolean | null | undefined>
   /**
-   * Called when the server rejects the token. Lets AuthContext clear the
+   * Called when the server rejects the token. Lets AuthProvider clear the
    * session without this module importing React or the router.
    */
   onUnauthorized?: () => void
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, token, onUnauthorized } = options
+/**
+ * An unauthenticated call. Use this only for endpoints the backend marks
+ * permitAll (auth endpoints, and GET on listings/categories/campuses/
+ * bulletin-posts). Everything else needs authedRequest.
+ */
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', body, token, query, onUnauthorized } = options
 
   const headers: Record<string, string> = {}
   if (body !== undefined) headers['Content-Type'] = 'application/json'
@@ -99,7 +80,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}${path}`, {
+    response = await fetch(`${BASE_URL}${path}${buildQuery(query)}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -134,6 +115,36 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return payload as T
 }
 
+/**
+ * The one to use for almost everything. Attaches the bearer token from the
+ * stored session automatically, so feature modules stay one-liners and nobody
+ * has to remember to thread `session.token` through from a component.
+ *
+ *   export const listingsApi = {
+ *     list: () => authedRequest<Listing[]>('/api/listings'),
+ *   }
+ */
+export function authedRequest<T>(
+  path: string,
+  options: Omit<RequestOptions, 'token'> = {},
+): Promise<T> {
+  return request<T>(path, { ...options, token: currentToken() })
+}
+
+function buildQuery(query: RequestOptions['query']): string {
+  if (!query) return ''
+
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== '') {
+      params.set(key, String(value))
+    }
+  }
+
+  const encoded = params.toString()
+  return encoded ? `?${encoded}` : ''
+}
+
 function safeJson(raw: string): unknown {
   try {
     return JSON.parse(raw)
@@ -146,29 +157,6 @@ function fallbackMessage(status: number): string {
   // The backend's 401 entry point returns an empty body, so supply the text.
   if (status === 401) return 'Your session has expired. Please sign in again.'
   if (status === 403) return 'You are not allowed to do that.'
+  if (status === 404) return 'We could not find that.'
   return `Request failed (${status}).`
-}
-
-export const api = {
-  register: (body: {
-    email: string
-    firstName: string
-    lastName: string
-    password: string
-    campusId?: number | null
-  }) => request<RegistrationResponse>('/api/auth/register', { method: 'POST', body }),
-
-  verifyOtp: (body: { email: string; code: string }) =>
-    request<AuthResponse>('/api/auth/verify-otp', { method: 'POST', body }),
-
-  resendOtp: (body: { email: string }) =>
-    request<RegistrationResponse>('/api/auth/resend-otp', { method: 'POST', body }),
-
-  login: (body: { email: string; password: string }) =>
-    request<AuthResponse>('/api/auth/login', { method: 'POST', body }),
-
-  me: (token: string, onUnauthorized?: () => void) =>
-    request<User>('/api/auth/me', { token, onUnauthorized }),
-
-  campuses: () => request<Campus[]>('/api/campuses'),
 }

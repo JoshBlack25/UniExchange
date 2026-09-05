@@ -5,49 +5,30 @@
   expiry is stored next to the token and checked on load - otherwise the app
   would boot "logged in" holding a token every request rejects.
 
-  localStorage rather than a cookie because the API reads the Authorization
-  header only (SessionCreationPolicy.STATELESS, CSRF disabled).
+  Reading and writing localStorage lives in @/lib/session so the API client can
+  attach the token without importing anything from React.
+
+  Author: Mogamat Yaseen Kannemeyer 240453182
 */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { api, ApiError } from '@/lib/api'
-import type { AuthResponse, User } from '@/lib/api'
+import { authApi } from '@/lib/api/auth'
+import { ApiError } from '@/lib/api/client'
+import type { AuthResponse, User } from '@/lib/api/types'
+import { clearStoredSession, readStoredSession, writeStoredSession } from '@/lib/session'
+import type { StoredSession } from '@/lib/session'
 
-import { AuthContext, SESSION_STORAGE_KEY } from './authContext'
-import type { AuthContextValue, StoredSession } from './authContext'
-
-function readStoredSession(): StoredSession | null {
-  try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY)
-    if (!raw) return null
-
-    const parsed = JSON.parse(raw) as StoredSession
-    if (!parsed.token || typeof parsed.expiresAt !== 'number') return null
-
-    // Treat an expired token as no session at all - there is no refresh endpoint.
-    if (parsed.expiresAt <= Date.now()) {
-      localStorage.removeItem(SESSION_STORAGE_KEY)
-      return null
-    }
-    return parsed
-  } catch {
-    // Private windows and cleared site data both land here.
-    return null
-  }
-}
+import { AuthContext } from './authContext'
+import type { AuthContextValue } from './authContext'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<StoredSession | null>(readStoredSession)
   const [user, setUser] = useState<User | null>(null)
 
   const signOut = useCallback(() => {
-    try {
-      localStorage.removeItem(SESSION_STORAGE_KEY)
-    } catch {
-      // The in-memory state below is what actually gates the UI.
-    }
+    clearStoredSession()
     setSession(null)
     setUser(null)
   }, [])
@@ -60,11 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles: response.roles,
       userId: response.userId,
     }
-    try {
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored))
-    } catch {
-      // Still usable for this tab even if persistence fails.
-    }
+    writeStoredSession(stored)
     setSession(stored)
     setUser(null)
   }, [])
@@ -79,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false
 
-    api
+    authApi
       .me(session.token)
       .then((fetched) => {
         if (!cancelled) setUser(fetched)

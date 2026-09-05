@@ -12,11 +12,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useAuth } from '@/auth/useAuth'
-import { Alert } from '@/components/Alert'
-import { AuthLayout } from '@/components/AuthLayout'
-import { Button } from '@/components/Button'
-import { OtpInput } from '@/components/OtpInput'
-import { api, ApiError } from '@/lib/api'
+import { Alert } from '@/components/ui/Alert'
+import { AuthLayout } from '@/components/layout/AuthLayout'
+import { Button } from '@/components/ui/Button'
+import { OtpInput } from '@/components/ui/OtpInput'
+import { authApi } from '@/lib/api/auth'
+import { ApiError } from '@/lib/api/client'
 
 const CODE_LENGTH = 6
 const RESEND_COOLDOWN_SECONDS = 60
@@ -55,9 +56,9 @@ export function VerifyOtpPage() {
     setError(null)
     setNotice(null)
     try {
-      const response = await api.verifyOtp({ email, code: submittedCode })
+      const response = await authApi.verifyOtp({ email, code: submittedCode })
       signIn(response)
-      navigate('/dashboard', { replace: true })
+      navigate('/feed', { replace: true })
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Could not verify that code.')
       setCode('')
@@ -70,7 +71,7 @@ export function VerifyOtpPage() {
     setError(null)
     setNotice(null)
     try {
-      const response = await api.resendOtp({ email })
+      const response = await authApi.resendOtp({ email })
       setNotice(response.message)
       setCooldown(RESEND_COOLDOWN_SECONDS)
     } catch (caught) {
