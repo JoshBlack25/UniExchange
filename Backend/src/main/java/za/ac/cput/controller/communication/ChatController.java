@@ -24,6 +24,8 @@ package za.ac.cput.controller.communication;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -92,7 +94,7 @@ public class ChatController {
     @PostMapping("/threads/{conversationId}/messages")
     public ResponseEntity<ChatMessageView> send(
             @PathVariable long conversationId,
-            @RequestBody SendMessageRequest request,
+            @Valid @RequestBody SendMessageRequest request,
             @AuthenticationPrincipal AuthenticatedUser principal) {
         return ResponseEntity.status(HttpStatus.CREATED).body(this.service.sendMessage(
                 me(principal), conversationId, request.content(), request.mediaId()));

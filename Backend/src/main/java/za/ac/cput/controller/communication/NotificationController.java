@@ -13,6 +13,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 import za.ac.cput.domain.communication.Notification;
 import za.ac.cput.dto.communication.NotificationRequest;
 import za.ac.cput.factory.communication.NotificationFactory;
+import za.ac.cput.security.UniExchangeUserDetailsService.AuthenticatedUser;
 import za.ac.cput.service.communication.INotificationService;
 
 @RestController
@@ -47,9 +49,13 @@ public class NotificationController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Notification> read(@PathVariable Long id) {
+    public ResponseEntity<Notification> read(@PathVariable Long id,
+                                             @AuthenticationPrincipal AuthenticatedUser principal) {
         Notification found = this.service.read(id);
-        return found == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(found);
+        if (found == null || !owns(principal, found.getUserId())) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(found);
     }
 
     @PutMapping("/{id}")
@@ -77,19 +83,36 @@ public class NotificationController {
     }
 
     @GetMapping("/user/{userId}")
-    public List<Notification> byUser(@PathVariable long userId) {
-        return this.service.findByUserId(userId);
+    public ResponseEntity<List<Notification>> byUser(@PathVariable long userId,
+                                                     @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (!owns(principal, userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(this.service.findByUserId(userId));
     }
 
     @GetMapping("/user/{userId}/unread")
-    public List<Notification> unreadByUser(@PathVariable long userId) {
-        return this.service.findUnreadForUser(userId);
+    public ResponseEntity<List<Notification>> unreadByUser(@PathVariable long userId,
+                                                           @AuthenticationPrincipal AuthenticatedUser principal) {
+        if (!owns(principal, userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(this.service.findUnreadForUser(userId));
     }
 
     @PatchMapping("/{id}/read")
-    public ResponseEntity<Notification> markRead(@PathVariable Long id) {
-        Notification updated = this.service.markRead(id);
-        return updated == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(updated);
+    public ResponseEntity<Notification> markRead(@PathVariable Long id,
+                                                 @AuthenticationPrincipal AuthenticatedUser principal) {
+        Notification existing = this.service.read(id);
+        if (existing == null || !owns(principal, existing.getUserId())) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(this.service.markRead(id));
+    }
+
+    /* Notifications are private to their recipient. 404 rather than 403 on single reads, so ids cannot be probed. */
+    private static boolean owns(AuthenticatedUser principal, long userId) {
+        return principal != null && principal.getUser().getUserId() == userId;
     }
 
 }

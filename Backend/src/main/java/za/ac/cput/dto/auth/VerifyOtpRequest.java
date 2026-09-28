@@ -19,5 +19,9 @@ import jakarta.validation.constraints.Pattern;
 public record VerifyOtpRequest(
         @NotBlank String email,
         @NotBlank @Pattern(regexp = "\\d{4,10}", message = "code must be digits only") String code,
-        boolean rememberMe) {
+        boolean rememberMe,
+        // Carried over from /login so an elevated sign-in survives the OTP step.
+        String mode,
+        // Required with a non-STANDARD mode: the ticket /login returned.
+        String loginTicket) {
 }

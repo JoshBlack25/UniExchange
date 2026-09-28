@@ -18,16 +18,19 @@
   signIn() so the new device token lands in the matching store.
 */
 
+import { EnvelopeSimpleOpen } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useAuth } from '@/auth/useAuth'
+import { Seo } from '@/components/seo/Seo'
 import { Alert } from '@/components/ui/Alert'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { Button } from '@/components/ui/Button'
 import { OtpInput } from '@/components/ui/OtpInput'
 import { authApi } from '@/lib/api/auth'
 import { ApiError } from '@/lib/api/client'
+import type { SessionMode } from '@/lib/api/types'
 
 const CODE_LENGTH = 6
 const RESEND_COOLDOWN_SECONDS = 60
@@ -39,6 +42,10 @@ type LocationState = {
   rememberMe?: boolean
   /** Where they were originally headed before being sent here. */
   from?: string
+  /** Set by the hidden moderator/admin sign-in, so the session opens in that mode. */
+  mode?: SessionMode
+  /** From an elevated sign-in: proves the password was checked, so the mode is honoured. */
+  loginTicket?: string
 } | null
 
 export function VerifyOtpPage() {
@@ -78,7 +85,13 @@ export function VerifyOtpPage() {
     setError(null)
     setNotice(null)
     try {
-      const response = await authApi.verifyOtp({ email, code: submittedCode, rememberMe })
+      const response = await authApi.verifyOtp({
+        email,
+        code: submittedCode,
+        rememberMe,
+        mode: state?.mode,
+        loginTicket: state?.loginTicket,
+      })
       // signIn also persists response.deviceToken, which is what lets the next
       // sign-in from this browser skip the code entirely.
       signIn(response, rememberMe)
@@ -118,11 +131,12 @@ export function VerifyOtpPage() {
         title="Verify your email"
         subtitle="We need to know which account to verify."
         footer={
-          <Link to="/signup" className="font-medium text-brand-700 hover:underline">
+          <Link to="/signup" className="rounded font-semibold text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500">
             Back to sign up
           </Link>
         }
       >
+        <Seo title="Verify your email" description="Confirm your CPUT email address with the code we sent you." noindex />
         <Alert>
           Open the link from your signup, or start again so we can send a new code.
         </Alert>
@@ -135,17 +149,18 @@ export function VerifyOtpPage() {
       title="Enter your code"
       subtitle={
         <>
-          We sent a {CODE_LENGTH}-digit code to <span className="font-medium text-ink-700">{email}</span>.
+          We sent a {CODE_LENGTH}-digit code to <span className="font-semibold text-fg wrap-break-word">{email}</span>.
           It expires in 10 minutes.
           {rememberMe && ' We will remember this device, so this is the last time you will need one here.'}
         </>
       }
       footer={
-        <Link to="/login" className="font-medium text-brand-700 hover:underline">
+        <Link to="/login" className="rounded font-semibold text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500">
           Back to sign in
         </Link>
       }
     >
+      <Seo title="Enter your code" description="Confirm your CPUT email address with the code we sent you." noindex />
       <form
         className="space-y-5"
         onSubmit={(event) => {
@@ -156,29 +171,47 @@ export function VerifyOtpPage() {
         {error && <Alert>{error}</Alert>}
         {notice && <Alert tone="info">{notice}</Alert>}
 
-        <OtpInput
-          value={code}
-          onChange={setCode}
-          onComplete={(complete) => void submit(complete)}
-          disabled={submitting}
-          invalid={error !== null}
-        />
+        {/* Decorative: "check your inbox". */}
+        <div aria-hidden="true" className="flex justify-center">
+          <span className="grid size-14 place-items-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+            <EnvelopeSimpleOpen weight="duotone" className="size-7" />
+          </span>
+        </div>
+
+        {/*
+          contain:inline-size stops the six inputs' intrinsic widths leaking into
+          AuthLayout's auto grid track - without it a phone lays the page out
+          ~460px wide and the card runs off the right edge.
+        */}
+        <div className="[contain:inline-size]">
+          <OtpInput
+            value={code}
+            onChange={setCode}
+            onComplete={(complete) => void submit(complete)}
+            disabled={submitting}
+            invalid={error !== null}
+          />
+        </div>
 
         <Button type="submit" loading={submitting} disabled={code.length !== CODE_LENGTH}>
           Verify and continue
         </Button>
 
-        <div className="text-center text-sm text-ink-500">
+        <div className="rounded-2xl border border-line bg-surface-muted/60 px-4 py-3 text-center text-sm text-fg-muted">
           Didn&apos;t get it?{' '}
           <button
             type="button"
             onClick={() => void resend()}
             disabled={cooldown > 0}
-            className="font-medium text-brand-700 hover:underline disabled:text-ink-400 disabled:no-underline"
+            className={
+              'inline-flex min-h-11 items-center rounded-lg px-1 font-semibold text-brand-700 hover:underline tabular-nums ' +
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ' +
+              'disabled:text-fg-muted disabled:no-underline'
+            }
           >
             {cooldown > 0 ? `Resend in ${cooldown}s` : 'Send a new code'}
           </button>
-          <p className="mt-1 text-xs text-ink-400">
+          <p className="text-xs text-fg-muted">
             Check your Junk folder if it hasn&apos;t arrived.
           </p>
         </div>

@@ -11,6 +11,7 @@ package za.ac.cput.repository.transactions;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -53,5 +54,15 @@ public interface WalletTopUpRepository extends JpaRepository<WalletTopUp, Long> 
     @Query("select coalesce(sum(t.amount), 0) from WalletTopUp t " +
            "where t.status = za.ac.cput.domain.enums.PaymentStatus.COMPLETED")
     BigDecimal sumCompleted();
+
+    /*
+     Backs the rolling daily top-up cap (WalletLimits). Pending attempts count too:
+     otherwise a student could open several top-up forms at once and pay them all.
+    */
+    @Query("select coalesce(sum(t.amount), 0) from WalletTopUp t " +
+           "where t.userId = :userId and t.createdAt >= :since and t.status in :statuses")
+    BigDecimal sumAmountSince(@Param("userId") long userId,
+                              @Param("since") LocalDateTime since,
+                              @Param("statuses") Collection<PaymentStatus> statuses);
 
 }

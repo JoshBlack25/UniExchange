@@ -44,6 +44,19 @@ export function notificationRoute(
       // which is what these notifications are prompting for.
       return { path: "/purchases", label: "View Purchase" };
     case "SYSTEM":
+      // Low-review alerts for moderators. The queue is behind moderator mode, so
+      // outside it this link just bounces back to the feed.
+      if (notification.entityType === "REVIEW") {
+        return { path: "/moderation/reviews", label: "Open Flagged Reviews" };
+      }
+      if (notification.entityType === "USER") {
+        return { path: "/profile", label: "Go to Profile" };
+      }
+      // USER_REPORT goes to moderators ("New report: ...") and back to the
+      // reporter (the outcome). Only the moderator copy has somewhere to go.
+      if (notification.entityType === "USER_REPORT" && notification.title.startsWith("New report")) {
+        return { path: "/moderation/reports", label: "Open Reports" };
+      }
       return null;
   }
 }

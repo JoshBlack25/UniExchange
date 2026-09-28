@@ -200,8 +200,10 @@ $env:DB_PASSWORD = "your-mysql-password"
 spring.datasource.password=your-mysql-password
 ```
 
-`application.properties` sets `spring.profiles.active=local`, so this file is
-picked up automatically — no extra flags. When it does not exist, Spring simply
+`application.properties` sets `spring.profiles.active=${SPRING_PROFILES_ACTIVE:local}`,
+so this file is picked up automatically — no extra flags. A deployment sets
+`SPRING_PROFILES_ACTIVE=prod`, which replaces `local` entirely, so production never
+loads a developer's local profile. When it does not exist, Spring simply
 ignores it, so teammates who never create one are unaffected. The filename is
 already in `.gitignore`, so it can never be committed.
 
@@ -369,20 +371,94 @@ In `Backend/src/main/resources/application.properties`:
 | `spring.datasource.url` | `jdbc:mysql://localhost:3306/uniexchange` | `DB_NAME` overrides the database name |
 | `spring.datasource.username` | `${DB_USERNAME:root}` | |
 | `spring.datasource.password` | `${DB_PASSWORD:}` | Never hardcode |
-| `spring.jpa.hibernate.ddl-auto` | `update` | Hibernate creates/updates tables on boot |
-| `app.jwt.secret` | `${JWT_SECRET:change-me-...}` | **Must be ≥ 32 bytes** or startup fails |
+| `spring.jpa.hibernate.ddl-auto` | `update` | Hibernate creates/updates tables on boot. `validate` under the `prod` profile |
+| `app.jwt.secret` | `${JWT_SECRET:}` | **No default** — set `JWT_SECRET` (or put it in `application-local.properties`). **Must be ≥ 32 bytes** or startup fails |
 | `app.jwt.ttl-seconds` | `3600` | One hour; there is no refresh endpoint |
-| `app.jwt.remembered-ttl-seconds` | `2592000` | 30 days, for a "Remember me" sign-in. A JWT cannot be revoked, so shorten this if that trade is unacceptable |
+| `app.jwt.remembered-ttl-seconds` | `604800` | 7 days, for a "Remember me" sign-in. A JWT cannot be revoked, so this is kept to a week |
 | `app.trusted-device.remembered-days` | `30` | How long a remembered browser may skip the OTP. Slides forward on each use |
 | `app.trusted-device.session-hours` | `12` | The same, when "Remember me" was **not** ticked. A hard cap |
 | `app.auth.student-email-pattern` | `^\d{8,10}@mycput\.ac\.za$` | The signup gate |
 | `app.otp.length` | `6` | |
 | `app.otp.ttl-minutes` | `10` | |
 | `app.otp.max-attempts` | `5` | After this the code is dead |
-| `app.otp.resend-cooldown-seconds` | `60` | |
-| `app.cors.allowed-origins` | `http://localhost:5173,http://localhost:3000` | Add your origin if you change the dev port |
+| `app.otp.resend-cooldown-seconds` | `60` | Applies to `/resend-otp` and to the code `/login` sends |
+| `app.otp.max-per-day` | `10` | Codes emailed to one account per rolling 24 hours (protects the Gmail quota) |
+| `app.cors.allowed-origins` | `${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}` | Set `CORS_ALLOWED_ORIGINS` to the deployed frontend origin. Never `*` |
+| `app.wallet.max-topup` / `max-transfer` | `5000.00` | Rand cap per top-up / per transfer |
+| `app.wallet.daily-limit` | `10000.00` | Most a student may top up, and separately send, in any rolling 24 hours |
+| `app.uploads.max-bytes` / `daily-quota-bytes` | `10485760` / `104857600` | 10 MB per image, 100 MB per student per rolling day |
+| `app.rate-limit.enabled` | `true` | Per-IP/per-user request limits (`security/RateLimitFilter`); tests switch it off |
+| `app.payfast.merchant-id` / `merchant-key` / `passphrase` | sandbox values | `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE` override them |
 
 Do not set `spring.jpa.properties.hibernate.dialect` — Hibernate 7 auto-detects it, and `MySQL8Dialect` no longer exists (only `org.hibernate.dialect.MySQLDialect`).
+
+### Production profile and schema
+
+`application-prod.properties` is loaded when `SPRING_PROFILES_ACTIVE=prod`. It sets
+`ddl-auto=validate`, hides exception messages and stack traces from error bodies,
+turns off SQL logging and the PayFast simulator, and trusts Azure's proxy headers
+(`server.forward-headers-strategy=native`).
+
+Because production never lets Hibernate alter the schema, **a new table must exist
+before the build that needs it is deployed**, or startup fails. Currently that is
+`uploaded_file` (who uploaded each `/uploads/...` file):
+
+```bash
+mysql -u <user> -p <database> < Backend/src/main/resources/db/uploaded-file-table.sql
+```
+
+On a **brand-new, empty** production database there is no full schema script, so
+`validate` has nothing to check against and startup fails. For the very first
+deploy only, add the App Setting `SPRING_JPA_HIBERNATE_DDL_AUTO=update`, let the app
+start once so Hibernate creates the tables, then **delete that setting** and restart.
+
+### Deploying (Azure App Service + Vercel)
+
+**Backend: Azure App Service (Linux, Java SE)**
+
+1. Create an **Azure Database for MySQL - Flexible Server** and a database named
+   `uniexchange`. Allow access from Azure services (Networking tab).
+2. Create a **Linux** Web App with the **Java SE** runtime. Pick the Java 25
+   stack to match `pom.xml`. If the portal does not offer 25 yet, lower
+   `java.version` in `pom.xml` to the newest LTS it does offer.
+3. Build with `./mvnw -B package` and deploy `target/uniexchange-0.0.1-SNAPSHOT.jar`
+   (for example `az webapp deploy --type jar --src-path target/uniexchange-0.0.1-SNAPSHOT.jar ...`).
+4. Set these **Application settings** (never in a committed file):
+
+| Setting | Value |
+|---|---|
+| `SPRING_PROFILES_ACTIVE` | `prod` |
+| `DB_HOST` | `<server>.mysql.database.azure.com` |
+| `DB_NAME` / `DB_USERNAME` / `DB_PASSWORD` | your database and admin login |
+| `JWT_SECRET` | 32+ random bytes, e.g. `openssl rand -base64 48` |
+| `CORS_ALLOWED_ORIGINS` | `https://<frontend>.vercel.app` (plus any custom domain) |
+| `FRONTEND_URL` | `https://<frontend>.vercel.app` (no trailing slash) |
+| `BACKEND_URL` | `https://<backend>.azurewebsites.net` (no trailing slash) |
+| `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true`, `APP_OTP_FROM` | SMTP. Without `SPRING_MAIL_HOST` OTPs only go to the log and nobody can sign up |
+| `PAYFAST_MERCHANT_ID` / `PAYFAST_MERCHANT_KEY` / `PAYFAST_PASSPHRASE` | see "Going live" below |
+
+`DB_HOST`, `FRONTEND_URL` and `BACKEND_URL` have no defaults in the prod profile on
+purpose: if one is missing, startup fails instead of quietly using localhost.
+Uploads and chat media are written under `/home/data`, which survives deploys and
+restarts (override with `UPLOADS_DIR` / `CHAT_MEDIA_DIR`). Keep the app at **one
+instance**: rate limits and files are local to it.
+
+**Frontend: Vercel**
+
+1. Import the repo and set **Root Directory** to `Frontend`. `Frontend/vercel.json`
+   sets the build, the SPA fallback (so refreshing `/wallet` does not 404) and
+   security headers.
+2. Environment variables (they are baked in at **build** time, so redeploy after
+   changing them):
+   - `VITE_API_BASE_URL=https://<backend>.azurewebsites.net`
+   - `VITE_SITE_URL=https://<frontend>.vercel.app`
+   - `VITE_STUDENT_EMAIL_PATTERN` (optional, defaults to the student pattern)
+
+### SQL injection
+
+Every query is a Spring Data derived query or a JPQL `@Query` with bound
+`:parameters`; there is no native SQL built from strings anywhere in the app. Keep
+it that way — never concatenate request values into a query string.
 
 ### Frontend environment
 
@@ -392,6 +468,7 @@ Do not set `spring.jpa.properties.hibernate.dialect` — Hibernate 7 auto-detect
 |---|---|---|
 | `VITE_API_BASE_URL` | `http://localhost:8080` | Where the API lives |
 | `VITE_STUDENT_EMAIL_PATTERN` | `^\d{8,10}@mycput\.ac\.za$` | Mirrors the backend rule, for instant form feedback |
+| `VITE_SITE_URL` | *(empty: the serving origin)* | Public origin for canonical URLs, `og:image`, and the build-time `sitemap.xml` / `robots.txt` / `llms.txt`. **Set it for production builds** |
 
 ## Email / OTP Delivery
 
@@ -615,7 +692,7 @@ everything is uppercase. Also add the live frontend's address to
    and `wallet_top_up` exactly as in step 6 above.
 5. Keep an eye on `PayFast ITN …` warnings in the logs for the first few days.
 
-> Behind Azure's proxy, `server.forward-headers-strategy=framework` means the
+> Behind Azure's proxy, `server.forward-headers-strategy=native` (prod profile) means the
 > source-IP check reads `X-Forwarded-For`. That's defence in depth only. The
 > checks that actually authenticate an ITN are the signature and the
 > confirmation call back to PayFast, so never remove either.

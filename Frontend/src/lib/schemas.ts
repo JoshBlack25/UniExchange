@@ -25,14 +25,26 @@ function studentEmailPattern(): RegExp {
 
 const STUDENT_EMAIL = studentEmailPattern();
 
+/*
+  CPUT staff sign up with their @cput.ac.za address - any mailbox name. Mirrors
+  app.auth.staff-email-pattern. Note "@cput": a student's @mycput.ac.za never
+  matches it.
+*/
+const STAFF_EMAIL = /^[a-z0-9._%+-]+@cput\.ac\.za$/i;
+
+export function isStaffEmail(email: string): boolean {
+  return STAFF_EMAIL.test(email.trim());
+}
+
+/** A student (@mycput.ac.za) or staff (@cput.ac.za) address. */
 export const studentEmailSchema = z
   .string()
   .trim()
-  .min(1, "Enter your student email")
+  .min(1, "Enter your CPUT email")
   .toLowerCase()
-  .regex(
-    STUDENT_EMAIL,
-    "Use your CPUT student email, for example 240453182@mycput.ac.za",
+  .refine(
+    (email) => STUDENT_EMAIL.test(email) || STAFF_EMAIL.test(email),
+    "Use your CPUT email: student number@mycput.ac.za, or your staff @cput.ac.za address",
   );
 
 // Matches the backend's @Size(min = 8) on RegisterRequest.password.
@@ -120,8 +132,47 @@ export const bulletinPostSchema = z.object({
     .optional(),
 });
 
+/*
+  A moderator editing someone's details. Plain strings with a "" default in the
+  form, for the same input/output-type reason as createListingSchema above.
+  cellPhone mirrors Helper.isValidMobileNumber: 10 to 15 digits, or empty.
+*/
+export const moderatorUserSchema = z.object({
+  firstName: z.string().trim().min(1, "Enter a first name").max(50, "Keep it under 50 characters"),
+  middleName: z.string().trim().max(50, "Keep it under 50 characters"),
+  lastName: z.string().trim().min(1, "Enter a last name").max(50, "Keep it under 50 characters"),
+  email: studentEmailSchema,
+  cellPhone: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || /^\d{10,15}$/.test(value), "Use 10 to 15 digits, or leave it empty"),
+  campusId: z.string(),
+});
+
+/* Campus announcements, written by moderators. Same limits as a bulletin post. */
+export const announcementSchema = z.object({
+  title: z.string().trim().min(1, "Enter a title").max(150, "Keep it under 150 characters"),
+  content: z.string().trim().min(1, "Write the announcement"),
+  category: z.enum(["GENERAL", "EVENT", "STUDY_GROUP", "LOST_AND_FOUND"]),
+});
+
+/* Changing your own password - including replacing a moderator's temporary one. */
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password"),
+    newPassword: passwordSchema,
+    confirmPassword: z.string(),
+  })
+  .refine((values) => values.newPassword === values.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
 export type SignUpValues = z.infer<typeof signUpSchema>;
 export type LoginValues = z.infer<typeof loginSchema>;
 export type OtpValues = z.infer<typeof otpSchema>;
 export type CreateListingFormData = z.infer<typeof createListingSchema>;
 export type BulletinPostValues = z.infer<typeof bulletinPostSchema>;
+export type ModeratorUserValues = z.infer<typeof moderatorUserSchema>;
+export type AnnouncementValues = z.infer<typeof announcementSchema>;
+export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;

@@ -1,8 +1,10 @@
 /*
- StudentEmailValidator.java
+ CputEmailValidator.java
 
- Backs @StudentEmail. Compiles the pattern from app.auth.student-email-pattern
- once at startup, falling back to Helper.STUDENT_EMAIL_PATTERN.
+ Backs @CputEmail. Compiles app.auth.student-email-pattern and
+ app.auth.staff-email-pattern once at startup, falling back to
+ Helper.STUDENT_EMAIL_PATTERN and Helper.STAFF_EMAIL_PATTERN. An address passes
+ if it matches either one.
 
  The property exists so that a legitimate student number of an unexpected length
  can be admitted by editing configuration, not by patching and redeploying - a
@@ -27,16 +29,19 @@ import org.springframework.beans.factory.annotation.Value;
 
 import za.ac.cput.util.Helper;
 
-public class StudentEmailValidator implements ConstraintValidator<StudentEmail, String> {
+public class CputEmailValidator implements ConstraintValidator<CputEmail, String> {
 
-    private static final Logger log = LoggerFactory.getLogger(StudentEmailValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(CputEmailValidator.class);
 
-    private final Pattern pattern;
+    private final Pattern studentPattern;
+    private final Pattern staffPattern;
 
-    public StudentEmailValidator(
-            @Value("${app.auth.student-email-pattern:}") String configuredPattern) {
+    public CputEmailValidator(
+            @Value("${app.auth.student-email-pattern:}") String studentPattern,
+            @Value("${app.auth.staff-email-pattern:}") String staffPattern) {
 
-        this.pattern = compile(configuredPattern);
+        this.studentPattern = compile(studentPattern, Helper.STUDENT_EMAIL_PATTERN, "student");
+        this.staffPattern = compile(staffPattern, Helper.STAFF_EMAIL_PATTERN, "staff");
     }
 
     @Override
@@ -45,21 +50,23 @@ public class StudentEmailValidator implements ConstraintValidator<StudentEmail, 
         if (Helper.isNullOrEmpty(email)) {
             return true;
         }
-        return this.pattern.matcher(email.trim()).matches();
+        String trimmed = email.trim();
+        return this.studentPattern.matcher(trimmed).matches()
+                || this.staffPattern.matcher(trimmed).matches();
     }
 
-    private static Pattern compile(String configuredPattern) {
+    private static Pattern compile(String configuredPattern, String fallback, String kind) {
         if (Helper.isNullOrEmpty(configuredPattern)) {
-            return Pattern.compile(Helper.STUDENT_EMAIL_PATTERN, Pattern.CASE_INSENSITIVE);
+            return Pattern.compile(fallback, Pattern.CASE_INSENSITIVE);
         }
         try {
             return Pattern.compile(configuredPattern.trim(), Pattern.CASE_INSENSITIVE);
         }
         catch (PatternSyntaxException ex) {
             // Never let a typo in configuration open the gate to everyone.
-            log.error("Invalid app.auth.student-email-pattern '{}' - falling back to the default",
-                    configuredPattern, ex);
-            return Pattern.compile(Helper.STUDENT_EMAIL_PATTERN, Pattern.CASE_INSENSITIVE);
+            log.error("Invalid app.auth.{}-email-pattern '{}' - falling back to the default",
+                    kind, configuredPattern, ex);
+            return Pattern.compile(fallback, Pattern.CASE_INSENSITIVE);
         }
     }
 

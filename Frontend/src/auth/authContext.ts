@@ -28,6 +28,8 @@ export type AuthContextValue = {
    */
   signIn: (response: AuthResponse, remember: boolean) => void
   signOut: () => void
+  /** Replace the cached profile, e.g. after uploading a new photo. */
+  updateUser: (user: User) => void
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

@@ -1,17 +1,84 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-ZA">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#16658a" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title data-seo-default>UniExchange — CPUT Student Marketplace</title>
+    <!--
+      Defaults for crawlers and link previews that do not run JavaScript
+      (WhatsApp, Slack, Facebook...): they describe the landing page. Once the
+      app starts, main.tsx removes every data-seo-default tag and each page's
+      <Seo> takes over. vite.config.ts fills in the SITE_URL placeholders.
+    -->
     <meta
       name="description"
-      content="UniExchange - a verified marketplace for buying, selling and exchanging goods within the CPUT student community."
+      content="A verified marketplace for CPUT students and staff: buy, sell and swap textbooks, tech, stationery and res essentials, chat with sellers and pay safely from an in-app wallet."
+      data-seo-default
     />
-    <title>UniExchange</title>
+    <meta property="og:type" content="website" data-seo-default />
+    <meta property="og:site_name" content="UniExchange" data-seo-default />
+    <meta property="og:title" content="UniExchange — CPUT Student Marketplace" data-seo-default />
+    <meta
+      property="og:description"
+      content="The verified marketplace for CPUT students and staff. Buy, sell and swap on campus, chat with sellers and pay from a wallet with escrow."
+      data-seo-default
+    />
+    <meta property="og:image" content="%SITE_URL%/og-image.png" data-seo-default />
+    <meta property="og:image:width" content="1200" data-seo-default />
+    <meta property="og:image:height" content="630" data-seo-default />
+    <meta property="og:image:alt" content="UniExchange - the verified marketplace for CPUT students" data-seo-default />
+    <meta property="og:locale" content="en_ZA" data-seo-default />
+    <meta name="twitter:card" content="summary_large_image" data-seo-default />
+    <meta name="twitter:title" content="UniExchange — CPUT Student Marketplace" data-seo-default />
+    <meta
+      name="twitter:description"
+      content="The verified marketplace for CPUT students and staff. Buy, sell and swap on campus, chat with sellers and pay from a wallet with escrow."
+      data-seo-default
+    />
+    <meta name="twitter:image" content="%SITE_URL%/og-image.png" data-seo-default />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#f0f4f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    />
+    <!--
+      Applies the saved theme before first paint so a dark-mode student never
+      sees a white flash. Must stay in sync with STORAGE_KEY in src/lib/theme.ts.
+      The production CSP allows this script by its sha256, which vite.config.ts
+      computes at build time - editing it is safe, nothing to update by hand.
+    -->
+    <script>
+      (function () {
+        var pref = 'system'
+        try {
+          pref = localStorage.getItem('ux-theme') || 'system'
+        } catch (e) {}
+        var dark =
+          pref === 'dark' ||
+          (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      })()
+    </script>
   </head>
   <body>
+    <noscript>
+      <div style="max-width: 32rem; margin: 4rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; line-height: 1.5">
+        <p><strong>UniExchange — CPUT Student Marketplace</strong></p>
+        <p>
+          UniExchange is a verified marketplace for CPUT students and staff. Please turn on JavaScript
+          to sign up, log in and use the marketplace.
+        </p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

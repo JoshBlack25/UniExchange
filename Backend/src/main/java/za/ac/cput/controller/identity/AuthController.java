@@ -20,6 +20,14 @@
  it never replaces the password - it only ever skips the second factor. See
  DeviceTrustService.
 
+ Moderators and admins use the same endpoints with a "mode". A normal sign-in
+ always yields a STANDARD session; MODERATOR/ADMIN sessions come only from
+ /login or /verify-otp with that mode (the frontend's hidden sign-in), or from
+ /elevate, and only when the account holds the role. See SessionMode.
+
+ Staff (@cput.ac.za) register exactly like students but receive FACULTY instead
+ of STUDENT.
+
  Every entity here (User, Role, UserRole, Verification, TrustedDevice) is built
  through its factory, never through setters.
 
@@ -40,6 +48,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.MailException;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -53,25 +62,30 @@ import org.springframework.web.bind.annotation.RestController;
 
 import za.ac.cput.domain.enums.AccountStatus;
 import za.ac.cput.domain.enums.RoleType;
-import za.ac.cput.domain.identity.Role;
 import za.ac.cput.domain.identity.User;
 import za.ac.cput.dto.auth.AuthResponse;
+import za.ac.cput.dto.auth.ChangePasswordRequest;
+import za.ac.cput.dto.auth.ElevateRequest;
 import za.ac.cput.dto.auth.LoginRequest;
 import za.ac.cput.dto.auth.RegisterRequest;
 import za.ac.cput.dto.auth.RegistrationResponse;
 import za.ac.cput.dto.auth.ResendOtpRequest;
+import za.ac.cput.dto.auth.StepDownRequest;
 import za.ac.cput.dto.auth.VerifyOtpRequest;
-import za.ac.cput.factory.identity.RoleFactory;
+import za.ac.cput.exception.ServiceUnavailableException;
 import za.ac.cput.factory.identity.UserFactory;
 import za.ac.cput.mail.EmailSender;
 import za.ac.cput.security.JwtService;
+import za.ac.cput.security.SessionMode;
 import za.ac.cput.security.UniExchangeUserDetailsService.AuthenticatedUser;
 import za.ac.cput.service.identity.DeviceTrustService;
 import za.ac.cput.service.identity.IRoleService;
 import za.ac.cput.service.identity.IUserRoleService;
 import za.ac.cput.service.identity.IUserService;
 import za.ac.cput.service.identity.OtpService;
+import za.ac.cput.service.identity.RoleAssignmentService;
 import za.ac.cput.service.transactions.IWalletService;
+import za.ac.cput.util.Helper;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -89,6 +103,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final IWalletService walletService;
+    private final RoleAssignmentService roleAssignments;
 
     public AuthController(IUserService userService,
                           IRoleService roleService,
@@ -99,8 +114,10 @@ public class AuthController {
                           AuthenticationManager authenticationManager,
                           PasswordEncoder passwordEncoder,
                           JwtService jwtService,
-                          IWalletService walletService) {
+                          IWalletService walletService,
+                          RoleAssignmentService roleAssignments) {
         this.walletService = walletService;
+        this.roleAssignments = roleAssignments;
         this.userService = userService;
         this.roleService = roleService;
         this.userRoleService = userRoleService;
@@ -132,7 +149,9 @@ public class AuthController {
                 AccountStatus.PENDING_VERIFICATION,
                 request.campusId()));
 
-        this.userRoleService.assignRole(created.getUserId(), defaultRole().getRoleId());
+        // Staff get FACULTY (shown as a "CPUT Staff" badge); everyone else STUDENT.
+        this.roleAssignments.grant(created.getUserId(),
+                Helper.isStaffEmail(email) ? RoleType.FACULTY : RoleType.STUDENT);
 
         /*
          Every student gets a wallet at registration, with a zero balance.
@@ -191,12 +210,29 @@ public class AuthController {
                 ? this.userService.update(UserFactory.verifyEmail(user))
                 : user;
 
+        // An account named in app.bootstrap.* that registered after startup.
+        this.roleAssignments.applyBootstrap(active);
+
+        SessionMode mode = requireModeAllowed(active, request.mode());
+
+        /*
+         The code alone never opens an elevated session: it proves the mailbox,
+         not the password. An elevated mode needs the ticket /login issued after
+         checking the password. Without one, fall back to an ordinary session.
+        */
+        if (mode != SessionMode.STANDARD
+                && this.jwtService.modeFromLoginTicket(request.loginTicket(), active.getEmail()) != mode) {
+            log.warn("Elevated verify-otp for userId {} without a valid login ticket - opening STANDARD",
+                    active.getUserId());
+            mode = SessionMode.STANDARD;
+        }
+
         String deviceToken = this.deviceTrustService.issue(
                 active.getUserId(), userAgent, request.rememberMe());
 
         // Verifying logs the student straight in - no second trip to /login.
         return ResponseEntity.ok(
-                tokenFor(active, rolesFor(active), request.rememberMe(), deviceToken));
+                tokenFor(active, rolesFor(active), request.rememberMe(), deviceToken, mode));
     }
 
     /** Issues a replacement code, subject to a cooldown. */
@@ -262,6 +298,10 @@ public class AuthController {
         AuthenticatedUser principal = (AuthenticatedUser) authentication.getPrincipal();
         User user = principal.getUser();
 
+        // Checked before any code is emailed, so the hidden sign-in cannot be
+        // used to spam a student's inbox either.
+        SessionMode mode = requireModeAllowed(user, request.mode());
+
         // Spring Security 7 also grants authentication-factor authorities such as
         // FACTOR_PASSWORD. Those are not application roles, so keep only ROLE_*.
         List<String> roles = authentication.getAuthorities().stream()
@@ -276,16 +316,33 @@ public class AuthController {
             String replacement = this.deviceTrustService.realign(
                     user.getUserId(), request.deviceToken(), userAgent, request.rememberMe());
 
-            return ResponseEntity.ok(tokenFor(user, roles, request.rememberMe(), replacement));
+            return ResponseEntity.ok(tokenFor(user, roles, request.rememberMe(), replacement, mode));
         }
 
-        log.info("Login from an untrusted device for userId {} - sending a code", user.getUserId());
-        sendCode(user);
+        /*
+         The same 60-second cooldown as /resend-otp. Without it a correct password
+         could be replayed to email a code on every request. Inside the cooldown the
+         code already sent is still valid, so answer exactly as if one had just gone
+         out - the student finishes at /verify-otp either way.
+        */
+        if (this.otpService.resendCooldownRemaining(user.getUserId()) > 0) {
+            log.info("Login from an untrusted device for userId {} - a code was sent moments ago, not resending",
+                    user.getUserId());
+        }
+        else {
+            log.info("Login from an untrusted device for userId {} - sending a code", user.getUserId());
+            sendCode(user);
+        }
+
+        String ticket = mode == SessionMode.STANDARD
+                ? null
+                : this.jwtService.mintLoginTicket(user.getEmail(), mode);
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new RegistrationResponse(
                 user.getEmail(),
                 "We sent a code to %s to confirm it's you.".formatted(user.getEmail()),
-                this.otpService.getTtlMinutes() * 60));
+                this.otpService.getTtlMinutes() * 60,
+                ticket));
     }
 
     @GetMapping("/me")
@@ -294,6 +351,70 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         return ResponseEntity.ok(principal.getUser());
+    }
+
+    /**
+     * Opens a moderator or admin session for someone already signed in. The
+     * password is asked for again; the device is already trusted because the
+     * caller holds a token, so no code is sent.
+     */
+    @PostMapping("/elevate")
+    public ResponseEntity<AuthResponse> elevate(@Valid @RequestBody ElevateRequest request,
+                                                Authentication authentication) {
+        User current = currentUser(authentication);
+
+        /*
+         400, not 401: the caller IS signed in, and a 401 would make the
+         frontend drop their whole session over a mistyped password. One message
+         for both failures, as at /login.
+        */
+        SessionMode mode = SessionMode.parse(request.mode());
+        boolean allowed = mode != SessionMode.STANDARD
+                && mode.permittedFor(this.roleAssignments.rolesOf(current.getUserId()))
+                && this.passwordEncoder.matches(request.password(), current.getPasswordHash());
+        if (!allowed) {
+            log.warn("Refused elevation to {} for userId {}", mode, current.getUserId());
+            throw new IllegalArgumentException("That password is not correct.");
+        }
+
+        return ResponseEntity.ok(tokenFor(current, rolesFor(current), false, null, mode));
+    }
+
+    /** Leaves moderator/admin mode, handing back an ordinary session. */
+    @PostMapping("/step-down")
+    public ResponseEntity<AuthResponse> stepDown(@RequestBody(required = false) StepDownRequest request,
+                                                 Authentication authentication) {
+        User current = currentUser(authentication);
+        boolean remembered = request != null && Boolean.TRUE.equals(request.rememberMe());
+        return ResponseEntity.ok(
+                tokenFor(current, rolesFor(current), remembered, null, SessionMode.STANDARD));
+    }
+
+    /**
+     * Changes the caller's own password. Every other session is signed out
+     * (credentialsChangedAt), and this one gets a fresh token so it carries on.
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<AuthResponse> changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                                       Authentication authentication) {
+        User current = currentUser(authentication);
+
+        if (!this.passwordEncoder.matches(request.currentPassword(), current.getPasswordHash())) {
+            throw new IllegalArgumentException("Your current password is not correct.");
+        }
+        if (request.currentPassword().equals(request.newPassword())) {
+            throw new IllegalArgumentException("Choose a password you have not used just now.");
+        }
+
+        User updated = this.userService.update(UserFactory.changePassword(
+                current, this.passwordEncoder.encode(request.newPassword())));
+
+        SessionMode mode = authentication.getPrincipal() instanceof AuthenticatedUser principal
+                ? principal.getMode()
+                : SessionMode.STANDARD;
+        boolean remembered = Boolean.TRUE.equals(request.rememberMe()) && mode == SessionMode.STANDARD;
+
+        return ResponseEntity.ok(tokenFor(updated, rolesFor(updated), remembered, null, mode));
     }
 
     /** Issues a code and emails it. The plaintext never leaves this method. */
@@ -323,7 +444,7 @@ public class AuthController {
         }
         catch (MailException ex) {
             log.error("Could not deliver the verification code to {}", user.getEmail(), ex);
-            throw new IllegalStateException(
+            throw new ServiceUnavailableException(
                     "We could not send the verification email. Please try again shortly.", ex);
         }
     }
@@ -336,14 +457,25 @@ public class AuthController {
                 .toList();
     }
 
-    /** The STUDENT role every new account starts with, created on first use. */
-    private Role defaultRole() {
-        Role existing = this.roleService.findByName(RoleType.STUDENT);
-        if (existing != null) {
-            return existing;
+    private static User currentUser(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthenticatedUser principal)) {
+            throw new BadCredentialsException("Not signed in");
         }
-        return this.roleService.create(RoleFactory.createRole(
-                RoleType.STUDENT, "Default role for a registered student"));
+        return principal.getUser();
+    }
+
+    /*
+     Refuses an elevated mode the account does not hold with the SAME error as a
+     wrong password, so the hidden sign-in cannot be used to discover who the
+     moderators are.
+    */
+    private SessionMode requireModeAllowed(User user, String requested) {
+        SessionMode mode = SessionMode.parse(requested);
+        if (!mode.permittedFor(this.roleAssignments.rolesOf(user.getUserId()))) {
+            log.warn("Refused {} sign-in for userId {} - role not held", mode, user.getUserId());
+            throw new BadCredentialsException("Role not held");
+        }
+        return mode;
     }
 
     /**
@@ -357,12 +489,15 @@ public class AuthController {
      *                    browser already holds one.
      */
     private AuthResponse tokenFor(User user, List<String> roles,
-                                  boolean remembered, String deviceToken) {
-        long ttlSeconds = this.jwtService.ttlSecondsFor(remembered);
+                                  boolean remembered, String deviceToken, SessionMode mode) {
+        long ttlSeconds = mode == SessionMode.STANDARD
+                ? this.jwtService.ttlSecondsFor(remembered)
+                : this.jwtService.getElevatedTtlSeconds();
 
         String token = this.jwtService.generateToken(user.getEmail(), Map.of(
                 "uid", user.getUserId(),
-                "roles", roles), ttlSeconds);
+                "roles", roles,
+                "mode", mode.name()), ttlSeconds);
 
         return new AuthResponse(
                 token,
@@ -371,7 +506,8 @@ public class AuthController {
                 user.getUserId(),
                 user.getEmail(),
                 roles,
-                deviceToken);
+                deviceToken,
+                mode.name());
     }
 
     /** Student addresses are case-insensitive; store and compare them lowercased. */

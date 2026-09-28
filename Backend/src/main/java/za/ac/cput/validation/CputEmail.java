@@ -1,7 +1,8 @@
 /*
- StudentEmail.java
+ CputEmail.java
 
- Bean Validation constraint for "this must be a CPUT student address".
+ Bean Validation constraint for "this must be a CPUT address": either a student
+ (<student number>@mycput.ac.za) or a member of staff (<name>@cput.ac.za).
 
  Applied at the registration boundary rather than inside UserFactory on purpose:
  being a student email is a *registration policy*, not a User invariant. The
@@ -32,10 +33,10 @@ import jakarta.validation.Payload;
 @Documented
 @Target({FIELD, METHOD, PARAMETER, RECORD_COMPONENT, ANNOTATION_TYPE})
 @Retention(RetentionPolicy.RUNTIME)
-@Constraint(validatedBy = StudentEmailValidator.class)
-public @interface StudentEmail {
+@Constraint(validatedBy = CputEmailValidator.class)
+public @interface CputEmail {
 
-    String message() default "Use your CPUT student email, for example 240453182@mycput.ac.za";
+    String message() default "Use your CPUT email: student number@mycput.ac.za, or your staff @cput.ac.za address";
 
     Class<?>[] groups() default {};
 

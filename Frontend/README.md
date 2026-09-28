@@ -218,7 +218,7 @@ choice is the whole mechanism:
 
 | Ticked | Session + device token in | Survives reload | Survives closing the browser |
 |---|---|---|---|
-| yes | `localStorage`, token lasts 30 days | yes | **yes** |
+| yes | `localStorage`, token lasts 7 days | yes | **yes** |
 | no | `sessionStorage`, token lasts 1 hour | yes | **no → code required again** |
 
 `sessionStorage` being wiped when the browser closes *is* the "session was lost"

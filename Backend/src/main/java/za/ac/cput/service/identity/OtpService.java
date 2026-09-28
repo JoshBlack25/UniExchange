@@ -12,6 +12,10 @@
     capped. Without that cap the OTP would be brute-forceable in minutes.
   - Issuing a new code invalidates any earlier unused one, so an old email
     cannot be replayed.
+  - At most app.otp.max-per-day codes are emailed to one account in any rolling
+    24 hours, which protects the Gmail sending quota and the student's inbox.
+    Counted in memory (one app instance); a restart resets it, which only ever
+    errs towards letting a student sign in.
 
  Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
@@ -21,9 +25,14 @@ package za.ac.cput.service.identity;
 
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import za.ac.cput.domain.enums.VerificationType;
 import za.ac.cput.domain.identity.Verification;
+import za.ac.cput.exception.TooManyRequestsException;
 import za.ac.cput.factory.identity.VerificationFactory;
 import za.ac.cput.repository.identity.VerificationRepository;
 
@@ -47,6 +57,9 @@ public class OtpService {
         MISMATCH
     }
 
+    private static final Duration DAY = Duration.ofDays(1);
+    private static final int SWEEP_THRESHOLD = 10_000;
+
     private final VerificationRepository repository;
     private final PasswordEncoder passwordEncoder;
     private final SecureRandom random = new SecureRandom();
@@ -55,19 +68,25 @@ public class OtpService {
     private final long ttlMinutes;
     private final int maxAttempts;
     private final long resendCooldownSeconds;
+    private final int maxPerDay;
+
+    /* userId -> when each recent code was issued, oldest first. At most maxPerDay entries each. */
+    private final Map<Long, Deque<Instant>> issuedRecently = new ConcurrentHashMap<>();
 
     public OtpService(VerificationRepository repository,
                       PasswordEncoder passwordEncoder,
                       @Value("${app.otp.length:6}") int length,
                       @Value("${app.otp.ttl-minutes:10}") long ttlMinutes,
                       @Value("${app.otp.max-attempts:5}") int maxAttempts,
-                      @Value("${app.otp.resend-cooldown-seconds:60}") long resendCooldownSeconds) {
+                      @Value("${app.otp.resend-cooldown-seconds:60}") long resendCooldownSeconds,
+                      @Value("${app.otp.max-per-day:10}") int maxPerDay) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
         this.length = length;
         this.ttlMinutes = ttlMinutes;
         this.maxAttempts = maxAttempts;
         this.resendCooldownSeconds = resendCooldownSeconds;
+        this.maxPerDay = maxPerDay;
     }
 
     /**
@@ -78,6 +97,7 @@ public class OtpService {
      */
     @Transactional
     public String issue(long userId) {
+        recordIssue(userId);
         supersedePending(userId);
 
         String code = randomCode();
@@ -138,6 +158,39 @@ public class OtpService {
 
     public int getMaxAttempts() {
         return this.maxAttempts;
+    }
+
+    /** Counts this issue against the daily cap, or refuses it with a 429. */
+    private void recordIssue(long userId) {
+        Instant now = Instant.now();
+        Instant cutoff = now.minus(DAY);
+        long[] retryAfter = {0};
+
+        this.issuedRecently.compute(userId, (id, times) -> {
+            Deque<Instant> recent = times == null ? new ArrayDeque<>() : times;
+            while (!recent.isEmpty() && recent.peekFirst().isBefore(cutoff)) {
+                recent.pollFirst();
+            }
+            if (recent.size() >= this.maxPerDay) {
+                retryAfter[0] = Math.max(1, Duration.between(cutoff, recent.peekFirst()).toSeconds());
+                return recent;
+            }
+            recent.addLast(now);
+            return recent;
+        });
+
+        if (retryAfter[0] > 0) {
+            throw new TooManyRequestsException(
+                    "Too many codes have been sent to this account today. Try again later.", retryAfter[0]);
+        }
+
+        // Keep the map bounded: drop accounts with nothing inside the window.
+        if (this.issuedRecently.size() > SWEEP_THRESHOLD) {
+            this.issuedRecently.entrySet().removeIf(entry -> {
+                Instant newest = entry.getValue().peekLast();
+                return newest == null || newest.isBefore(cutoff);
+            });
+        }
     }
 
     /** Most recent unused EMAIL verification for the user, if any. */

@@ -64,6 +64,11 @@ public class VendorApplicationServiceImpl implements IVendorApplicationService {
     }
 
     @Override
+    public List<VendorApplication> findByApplicantId(long applicantId) {
+        return this.repository.findByApplicantId(applicantId);
+    }
+
+    @Override
     public VendorApplication decide(Long vendorApplicationId, VendorApplicationStatus decision, long reviewedBy, String reviewNote) {
         VendorApplication found = read(vendorApplicationId);
         if (found == null) {

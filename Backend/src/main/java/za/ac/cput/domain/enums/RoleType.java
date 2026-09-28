@@ -14,5 +14,9 @@ public enum RoleType {
     FACULTY,
     VENDOR,
     RESIDENT,
+    // Moderates content and ordinary users. Its powers only apply in a session
+    // opened through the moderator sign-in - see JwtAuthenticationFilter.
+    MODERATOR,
+    // Everything MODERATOR can do, plus granting and revoking MODERATOR/ADMIN.
     ADMIN
 }

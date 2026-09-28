@@ -15,25 +15,20 @@
   Author: Mogamat Yaseen Kannemeyer 240453182
 */
 
-import { forwardRef } from 'react'
-
 type CheckboxProps = Omit<React.ComponentProps<'input'>, 'type'> & {
   label: string
   error?: string
   hint?: string
 }
 
-export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox(
-  { label, error, hint, id, className = '', ...rest },
-  ref,
-) {
+export function Checkbox({ label, error, hint, id, className = '', ref, ...rest }: CheckboxProps) {
   const inputId = id ?? rest.name
   const describedBy = error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined
 
   return (
     <div className="space-y-1.5">
       {/* The whole row is the label, so tapping the text toggles the box too. */}
-      <label htmlFor={inputId} className="flex items-start gap-2.5">
+      <label htmlFor={inputId} className="flex min-h-6 cursor-pointer items-start gap-2.5">
         <input
           {...rest}
           type="checkbox"
@@ -42,12 +37,12 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={
-            'mt-0.5 size-4 shrink-0 rounded border-gray-300 accent-brand-600 ' +
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ' +
+            'mt-0.5 size-4 shrink-0 rounded border-line-strong accent-[var(--ux-primary)] ' +
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ' +
             className
           }
         />
-        <span className="text-sm text-ink-700 select-none">{label}</span>
+        <span className="text-sm text-fg select-none">{label}</span>
       </label>
 
       {error ? (
@@ -56,10 +51,10 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         </p>
       ) : hint ? (
         // Indented to line up with the label text, not the box.
-        <p id={`${inputId}-hint`} className="pl-[26px] text-xs text-ink-400">
+        <p id={`${inputId}-hint`} className="pl-[26px] text-xs text-fg-subtle">
           {hint}
         </p>
       ) : null}
     </div>
   )
-})
+}

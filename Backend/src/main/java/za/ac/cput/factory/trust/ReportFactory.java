@@ -13,6 +13,7 @@ package za.ac.cput.factory.trust;
 
 import java.time.LocalDateTime;
 
+import za.ac.cput.domain.enums.ReportReason;
 import za.ac.cput.domain.enums.ReportStatus;
 import za.ac.cput.domain.enums.ReportTargetType;
 import za.ac.cput.domain.trust.Report;
@@ -55,6 +56,16 @@ public class ReportFactory {
                 .setStatus(status)
                 .setCreatedAt(now)
                 .build();
+    }
+
+    /** A new report from the Report button: always PENDING, with its dropdown category. */
+    public static Report createReport(long reporterId, ReportTargetType targetType, long targetId,
+                                      ReportReason category, String details) {
+        if (!Helper.isValidObject(category)) {
+            throw new IllegalArgumentException("Report: category is required");
+        }
+        Report report = createReport(reporterId, targetType, targetId, details, ReportStatus.PENDING);
+        return new Report.Builder().copy(report).setCategory(category).build();
     }
 
     public static Report updateReport(Report existing, long reporterId, ReportTargetType targetType,

@@ -1,84 +1,53 @@
 /*
-  The five tab icons, the notification bell and the wallet.
+  The shell's icons: five tabs, bell, wallet and the extras the top bar and
+  left sidebar need.
 
-  Hand-written rather than an icon package, matching Logo and Button: 24x24
-  viewBox, fill="none", stroke="currentColor", strokeWidth 2, rounded caps.
-  Size them with Tailwind's size-* utility at the call site.
+  Thin wrappers over Phosphor (@phosphor-icons/react) so call sites keep the
+  old API - size with Tailwind's size-* utility, and pass `active` to switch
+  to the filled weight for the current destination. Anywhere else in the app,
+  import from @phosphor-icons/react directly and keep weight="regular" (or
+  "fill" for an on/selected state) so there is one icon language.
 
   Author: Mogamat Yaseen Kannemeyer 240453182
 */
 
-type IconProps = { className?: string }
+import {
+  Bell,
+  ChatCircleDots,
+  Crown,
+  House,
+  MagnifyingGlass,
+  Megaphone,
+  Moon,
+  PlusCircle,
+  ShieldCheck,
+  ShoppingBag,
+  SignOut,
+  Sun,
+  UserCircle,
+  Wallet,
+  type Icon,
+} from '@phosphor-icons/react'
 
-const BASE = {
-  viewBox: '0 0 24 24',
-  fill: 'none' as const,
-  stroke: 'currentColor',
-  strokeWidth: 2,
-  strokeLinecap: 'round' as const,
-  strokeLinejoin: 'round' as const,
-  'aria-hidden': true,
+export type NavIconProps = { className?: string; active?: boolean }
+
+function wrap(PhosphorIcon: Icon) {
+  return function NavIcon({ className = 'size-5', active = false }: NavIconProps) {
+    return <PhosphorIcon aria-hidden="true" className={className} weight={active ? 'fill' : 'regular'} />
+  }
 }
 
-export function FeedIcon({ className = 'size-5' }: IconProps) {
-  return (
-    <svg {...BASE} className={className}>
-      <path d="M3 10.5 12 3l9 7.5" />
-      <path d="M5 9.5V21h14V9.5" />
-    </svg>
-  )
-}
-
-export function BulletinIcon({ className = 'size-5' }: IconProps) {
-  return (
-    <svg {...BASE} className={className}>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M7 9h10M7 13h6" />
-    </svg>
-  )
-}
-
-export function SellIcon({ className = 'size-5' }: IconProps) {
-  return (
-    <svg {...BASE} className={className}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 8v8M8 12h8" />
-    </svg>
-  )
-}
-
-export function MessagesIcon({ className = 'size-5' }: IconProps) {
-  return (
-    <svg {...BASE} className={className}>
-      <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2Z" />
-    </svg>
-  )
-}
-
-export function ProfileIcon({ className = 'size-5' }: IconProps) {
-  return (
-    <svg {...BASE} className={className}>
-      <circle cx="12" cy="8" r="3.5" />
-      <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
-    </svg>
-  )
-}
-
-export function BellIcon({ className = 'size-5' }: IconProps) {
-  return (
-    <svg {...BASE} className={className}>
-      <path d="M18 8a6 6 0 0 0-12 0c0 6-2 7-2 7h16s-2-1-2-7" />
-      <path d="M10.5 20a2 2 0 0 0 3 0" />
-    </svg>
-  )
-}
-
-export function WalletIcon({ className = 'size-5' }: IconProps) {
-  return (
-    <svg {...BASE} className={className}>
-      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H18a2 2 0 0 1 2 2v1" />
-      <path d="M3 7.5V17a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2.5" />
-      <path d="M21 14.5h-4a2.5 2.5 0 0 1 0-5h4z" />
-    </svg>
-  )
-}
+export const FeedIcon = wrap(House)
+export const BulletinIcon = wrap(Megaphone)
+export const SellIcon = wrap(PlusCircle)
+export const MessagesIcon = wrap(ChatCircleDots)
+export const ProfileIcon = wrap(UserCircle)
+export const BellIcon = wrap(Bell)
+export const WalletIcon = wrap(Wallet)
+export const PurchasesIcon = wrap(ShoppingBag)
+export const SearchIcon = wrap(MagnifyingGlass)
+export const SignOutIcon = wrap(SignOut)
+export const MoonIcon = wrap(Moon)
+export const SunIcon = wrap(Sun)
+export const ModerationIcon = wrap(ShieldCheck)
+export const AdminIcon = wrap(Crown)

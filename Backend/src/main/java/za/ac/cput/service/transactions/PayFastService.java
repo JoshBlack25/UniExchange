@@ -58,6 +58,7 @@ import za.ac.cput.domain.enums.PaymentStatus;
 import za.ac.cput.domain.identity.User;
 import za.ac.cput.domain.transactions.WalletTopUp;
 import za.ac.cput.dto.transactions.WalletDtos;
+import za.ac.cput.exception.ServiceUnavailableException;
 import za.ac.cput.factory.transactions.WalletTopUpFactory;
 import za.ac.cput.repository.identity.UserRepository;
 import za.ac.cput.repository.transactions.WalletTopUpRepository;
@@ -94,6 +95,7 @@ public class PayFastService {
     private final WalletTopUpRepository topUpRepository;
     private final UserRepository userRepository;
     private final IWalletService walletService;
+    private final WalletLimits limits;
     private final HttpClient httpClient;
     private final TransactionTemplate transactionTemplate;
 
@@ -111,6 +113,7 @@ public class PayFastService {
     public PayFastService(WalletTopUpRepository topUpRepository,
                           UserRepository userRepository,
                           IWalletService walletService,
+                          WalletLimits limits,
                           PlatformTransactionManager transactionManager,
                           @Value("${app.payfast.sandbox:true}") boolean sandbox,
                           @Value("${app.payfast.merchant-id:10054859}") String merchantId,
@@ -125,6 +128,7 @@ public class PayFastService {
         this.topUpRepository = topUpRepository;
         this.userRepository = userRepository;
         this.walletService = walletService;
+        this.limits = limits;
         this.httpClient = HttpClient.newBuilder().connectTimeout(CONFIRM_TIMEOUT).build();
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.sandbox = sandbox;
@@ -183,6 +187,9 @@ public class PayFastService {
                 ? null
                 : amount.setScale(2, RoundingMode.HALF_UP);
 
+        // Per-top-up and rolling 24-hour caps (app.wallet.*), before any row is written.
+        this.limits.checkTopUp(userId, scaled);
+
         WalletTopUp topUp = this.topUpRepository.save(
                 WalletTopUpFactory.createWalletTopUp(userId, scaled));
 
@@ -237,7 +244,7 @@ public class PayFastService {
         if (discovered == null) {
             // Refuse rather than fall back: without the tunnel PayFast can never confirm
             // the payment, so the student would pay and the wallet would never move.
-            throw new IllegalStateException("The PayFast tunnel isn't running, so this payment could "
+            throw new ServiceUnavailableException("The PayFast tunnel isn't running, so this payment could "
                     + "not be confirmed. Start \"Full Stack + PayFast tunnel\" in VS Code (or run "
                     + "cloudflared) and try again.");
         }

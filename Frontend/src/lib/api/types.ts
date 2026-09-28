@@ -24,21 +24,42 @@
 
 export type AccountStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED'
 
-export type RoleType = 'STUDENT' | 'FACULTY' | 'VENDOR' | 'RESIDENT' | 'ADMIN'
+export type RoleType = 'STUDENT' | 'FACULTY' | 'VENDOR' | 'RESIDENT' | 'MODERATOR' | 'ADMIN'
 
+/*
+  What the current session may do. A moderator or admin who signs in normally
+  gets STANDARD and is treated like any student; MODERATOR / ADMIN sessions come
+  only from the hidden sign-in (Ctrl+Alt+M / Ctrl+Alt+A). The backend enforces
+  this - the frontend only uses it to decide what to show.
+*/
+export type SessionMode = 'STANDARD' | 'MODERATOR' | 'ADMIN'
+
+/** STAFF for an @cput.ac.za account, STUDENT otherwise. Computed by the backend from the email. */
+export type Affiliation = 'STUDENT' | 'STAFF'
+
+/*
+  GET /api/users/{id} returns the full record only for your own account and in
+  a moderator/admin session. For anyone else it is a public profile
+  (PublicUserProfile on the backend) with no email, cellPhone, dateOfBirth,
+  emailVerifiedAt or updatedAt - hence those are optional here. Render them
+  only when present.
+*/
 export type User = {
   userId: number
-  email: string
+  email?: string
   firstName: string
   middleName: string | null
   lastName: string
-  cellPhone: string | null
-  dateOfBirth: string | null
+  cellPhone?: string | null
+  dateOfBirth?: string | null
   accountStatus: AccountStatus
-  emailVerifiedAt: string | null
+  emailVerifiedAt?: string | null
   campusId: number | null
   createdAt: string
-  updatedAt: string
+  updatedAt?: string
+  affiliation?: Affiliation
+  /** Relative to the API (prefix BASE_URL); null when there is no photo. See photoSrc(). */
+  profilePhotoUrl?: string | null
 }
 
 export type Campus = {
@@ -61,12 +82,15 @@ export type AuthResponse = {
     browser already holds a valid one. Store it with writeDeviceToken().
   */
   deviceToken: string | null
+  mode: SessionMode
 }
 
 export type RegistrationResponse = {
   email: string
   message: string
   codeExpiresInSeconds: number
+  /** Only from an elevated /login: proof the password was checked, needed by /verify-otp. */
+  loginTicket?: string | null
 }
 
 /* --------------------------------------------------------------- marketplace */
@@ -86,6 +110,11 @@ export type Listing = {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+  /** Filled in by the backend from the seller's account. */
+  sellerName?: string | null
+  sellerAffiliation?: Affiliation | null
+  /** The card photo (primary image, else the first); null when the listing has none. */
+  coverImageUrl?: string | null
 }
 
 export type Category = {
@@ -334,4 +363,160 @@ export type PayFastRedirect = {
    * When this is true the UI completes the top-up itself instead of redirecting.
    */
   simulatorEnabled: boolean
+}
+
+/* ---------------------------------------------------------------- moderation */
+
+/** A user as moderators see them. Never carries a password hash. */
+export type ModeratedUser = {
+  userId: number
+  email: string
+  firstName: string
+  middleName: string | null
+  lastName: string
+  cellPhone: string | null
+  campusId: number | null
+  accountStatus: AccountStatus
+  affiliation: Affiliation
+  roles: RoleType[]
+  emailVerifiedAt: string | null
+  createdAt: string
+}
+
+export type UserSummary = {
+  userId: number
+  name: string
+  email: string
+  accountStatus: AccountStatus
+}
+
+export type ModeratedPost = {
+  post: BulletinPost
+  author: UserSummary | null
+}
+
+export type FlaggedReview = {
+  reviewId: number
+  transactionId: number
+  rating: number
+  comment: string | null
+  createdAt: string
+  reviewer: UserSummary | null
+  reviewee: UserSummary | null
+}
+
+export type AuditEntry = {
+  auditLogId: number
+  action: string
+  targetType: string
+  targetId: number | null
+  details: string | null
+  createdAt: string
+  actor: UserSummary | null
+}
+
+export type ModerationOverview = {
+  flaggedReviews: number
+  suspendedUsers: number
+  removedThisWeek: number
+  pendingReports: number
+  totalUsers: number
+  activeListings: number
+  recentActivity: AuditEntry[]
+}
+
+/* ---- reports */
+
+/** Why something was reported, or why a moderator acted. See src/lib/reportReasons.ts. */
+export type ReportReason =
+  | 'SCAM_OR_FRAUD'
+  | 'PROHIBITED_ITEM'
+  | 'MISLEADING_LISTING'
+  | 'HARASSMENT_OR_BULLYING'
+  | 'HATE_SPEECH'
+  | 'INAPPROPRIATE_CONTENT'
+  | 'SPAM'
+  | 'FAKE_ACCOUNT'
+  | 'IMPERSONATION'
+  | 'UNSAFE_MEETUP'
+  | 'OTHER'
+
+export type ReportTargetType = 'LISTING' | 'USER' | 'MESSAGE' | 'BULLETIN_POST'
+export type ReportStatus = 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'DISMISSED'
+
+/** What a moderator must send to suspend, delete or remove. */
+export type ActionReport = {
+  reason: ReportReason
+  details: string
+  /** The user report this answers, if it came from the queue. */
+  userReportId?: number | null
+}
+
+export type ModerationActionType = 'ACCOUNT_SUSPENDED' | 'ACCOUNT_DELETED' | 'LISTING_REMOVED' | 'POST_REMOVED'
+
+/** The saved report behind a moderator action (a "case file"). Names are snapshots. */
+export type ModerationReport = {
+  moderationReportId: number
+  action: ModerationActionType
+  reason: ReportReason
+  details: string
+  subjectUserId: number
+  subjectName: string
+  subjectEmail: string
+  targetType: string
+  targetId: number
+  targetTitle: string | null
+  moderatorId: number
+  moderatorName: string
+  userReportId: number | null
+  sentToUser: boolean
+  emailedAt: string | null
+  createdAt: string
+}
+
+/** A report a user filed, as the moderation queue shows it. */
+export type UserReport = {
+  reportId: number
+  targetType: ReportTargetType
+  targetId: number
+  targetTitle: string
+  targetOwner: UserSummary | null
+  reporter: UserSummary | null
+  category: ReportReason | null
+  details: string
+  status: ReportStatus
+  resolutionNote: string | null
+  createdAt: string
+  resolvedAt: string | null
+}
+
+/* ---- dashboard analytics (GET /api/moderation/analytics) */
+
+export type AnalyticsRange = '1d' | '2d' | '3d' | '1w' | '2w' | '1m' | '2m' | '3m' | '6m' | '1y'
+export type AnalyticsBucket = 'HOUR' | 'DAY' | 'WEEK'
+
+export type AnalyticsSeries = {
+  /** One value per bucket; null where there is nothing to show (an average of no reviews). */
+  values: (number | null)[]
+  total: number | null
+  /** The same metric over the equally long window just before this one. */
+  previousTotal: number | null
+}
+
+export type Analytics = {
+  range: AnalyticsRange
+  bucket: AnalyticsBucket
+  from: string
+  to: string
+  /** Start of each bucket, oldest first. */
+  buckets: string[]
+  /** Money series (salesVolume, topUpVolume) are only present in an admin session. */
+  series: Record<string, AnalyticsSeries>
+}
+
+export type PageResponse<T> = {
+  items: T[]
+  page: number
+  size: number
+  total: number
 }

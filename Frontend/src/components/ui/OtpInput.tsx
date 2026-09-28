@@ -88,7 +88,7 @@ export function OtpInput({
   }
 
   return (
-    <div className="flex justify-between gap-2" role="group" aria-label="Verification code">
+    <div className="flex justify-between gap-1.5 sm:gap-2" role="group" aria-label="Verification code">
       {cells.map((char, index) => (
         <input
           key={index}
@@ -96,12 +96,12 @@ export function OtpInput({
             inputs.current[index] = node
           }}
           className={
-            'otp-cell size-12 rounded-lg border bg-white text-center text-lg font-semibold ' +
-            'text-ink-900 tabular-nums focus:outline-2 focus:outline-offset-0 ' +
-            'disabled:bg-gray-50 disabled:text-ink-400 ' +
+            'otp-cell h-13 min-w-0 flex-1 rounded-xl border bg-surface text-center text-xl font-semibold shadow-xs ' +
+            'text-fg tabular-nums transition focus:border-brand-500 focus:outline-2 focus:outline-offset-0 ' +
+            'disabled:bg-surface-muted disabled:text-fg-subtle ' +
             (invalid
-              ? 'border-red-300 focus:outline-red-500'
-              : 'border-gray-300 focus:outline-brand-600')
+              ? 'border-red-300 focus:outline-red-500/40'
+              : 'border-line-strong focus:outline-brand-500/30')
           }
           type="text"
           inputMode="numeric"

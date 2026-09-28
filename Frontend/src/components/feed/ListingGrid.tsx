@@ -1,8 +1,9 @@
 /*
   ListingGrid - responsive card grid for the feed with a staggered entrance.
-  1 column (mobile) -> 2 (sm+). Capped at 2 columns (was up to 3) because the
-  center column is narrower now that both the left and right rails are
-  present, matching the desktop mockup's fixed 2-up grid.
+  2 compact columns on phones (marketplace-style) -> 3 from md. The feed no
+  longer has its own left rail, so the centre column is wide enough for
+  three cards next to the global LeftSidebar and the xl right rail.
+  FeedPage's skeleton grid uses the same GRID classes (keep them in sync).
 
   Cards fade in and rise 8px, one after another (40ms stagger), on mount.
   Motion-Primitives pattern implemented directly on the `motion` library.
@@ -21,15 +22,21 @@ type ListingGridProps = {
   listings: Listing[];
   /** campusId -> campus name, resolved once in FeedPage. */
   campusNames: Record<number, string>;
+  /** categoryId -> category name, for the card placeholder icon. */
+  categoryNames?: Record<number, string>;
 };
 
 const STAGGER_MS = 0.04; // seconds between each card's entrance
 
-export function ListingGrid({ listings, campusNames }: ListingGridProps) {
+export function ListingGrid({
+  listings,
+  campusNames,
+  categoryNames = {},
+}: ListingGridProps) {
   const reduceMotion = useReducedMotion();
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
       {listings.map((listing, index) => (
         <motion.div
           key={listing.listingId}
@@ -37,13 +44,14 @@ export function ListingGrid({ listings, campusNames }: ListingGridProps) {
           animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
           transition={{
             duration: 0.25,
-            delay: index * STAGGER_MS,
+            delay: Math.min(index, 12) * STAGGER_MS,
             ease: "easeOut",
           }}
         >
           <ListingCard
             listing={listing}
             campusName={campusNames[listing.campusId]}
+            categoryName={categoryNames[listing.categoryId]}
           />
         </motion.div>
       ))}

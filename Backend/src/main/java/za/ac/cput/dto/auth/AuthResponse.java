@@ -26,5 +26,7 @@ public record AuthResponse(
         long userId,
         String email,
         List<String> roles,
-        String deviceToken) {
+        String deviceToken,
+        // STANDARD, MODERATOR or ADMIN - see SessionMode.
+        String mode) {
 }

@@ -17,6 +17,8 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -91,7 +93,7 @@ public class MyWalletController {
      * returning to the site proves nothing, since anyone can open the return URL.
      */
     @PostMapping("/topup")
-    public ResponseEntity<PayFastRedirect> topUp(@RequestBody TopUpRequest request,
+    public ResponseEntity<PayFastRedirect> topUp(@Valid @RequestBody TopUpRequest request,
                                                  @AuthenticationPrincipal AuthenticatedUser principal) {
         LinkedHashMap<String, String> fields = this.payFastService.beginTopUp(me(principal), request.amount());
 
@@ -104,7 +106,7 @@ public class MyWalletController {
 
     /** Sends money to another student. The sender is whoever holds the token, never the body. */
     @PostMapping("/transfer")
-    public TransferResult transfer(@RequestBody TransferRequest request,
+    public TransferResult transfer(@Valid @RequestBody TransferRequest request,
                                    @AuthenticationPrincipal AuthenticatedUser principal) {
         return this.transferService.send(me(principal), request.recipientEmail(), request.amount());
     }

@@ -18,11 +18,20 @@
   The signed-in student's campus (useAuth().user?.campusId) is the default
   campus filter - that is the whole "hyper-local" point of the product.
 
-  LAYOUT: three columns on large screens, matching the desktop mockup -
-  FeedSidebar (categories/filters) | main feed | right rail (live activity +
-  safe-exchange callout). The right rail is presentational scaffolding for
-  now (see CampusLiveFeed.tsx / SafeExchangeCard.tsx) - hidden below `xl` so
-  it never competes with the feed on medium screens.
+  LAYOUT (Facebook Marketplace style): the global AppLayout already renders
+  the LeftSidebar, so this page is just main column + right rail (Columns):
+   - main: "What are you selling?" composer strip -> compact toolbar
+     (search, campus, sort, Filters button) -> CategoryChips row -> results
+     line -> listing grid (2 compact columns on phones, 3 from md)
+   - the category list with counts + condition filter (FeedSidebar) live in
+     a "Filters" Sheet - bottom sheet on phones, right panel on desktop - so
+     they are reachable at every width
+   - right rail, xl only: CampusLiveFeed, SafeExchangeCard, TrustCallout.
+     Presentational scaffolding for now; nothing essential lives there.
+
+  URL: the TopBar search navigates to /feed?q=<text>. The search box starts
+  from `q` and re-syncs whenever `q` changes (a new TopBar search while the
+  feed is already open).
 
   UX details (borrowed patterns: Preline skeleton loading, Origin UI filter
   pills, standard sort control):
@@ -31,26 +40,47 @@
    - sort control: newest / price up / price down, applied client-side
    - active-filter pills in a result toolbar, each individually removable
    - search box has an inline clear button
+   - Filters button shows how many sheet filters are active
 
   Components used only by this page live in src/components/feed/.
 */
 
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  ArrowRight,
+  Camera,
+  CaretDown,
+  MagnifyingGlass,
+  MapPin,
+  Package,
+  SlidersHorizontal,
+  SortAscending,
+  X,
+} from "@phosphor-icons/react";
+import type { Icon } from "@phosphor-icons/react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/auth/useAuth";
 import { ActiveFilters } from "@/components/feed/ActiveFilters";
 import { CampusLiveFeed } from "@/components/feed/CampusLiveFeed";
 import { CategoryChips } from "@/components/feed/CategoryChips";
+import {
+  DEFAULT_CONDITION,
+  type ConditionValue,
+} from "@/components/feed/conditionOptions";
 import { FeedSidebar } from "@/components/feed/FeedSidebar";
 import { ListingCardSkeleton } from "@/components/feed/ListingCardSkeleton";
 import { ListingGrid } from "@/components/feed/ListingGrid";
 import { SafeExchangeCard } from "@/components/feed/SafeExchangeCard";
+import { TrustCallout } from "@/components/feed/TrustCallout";
+import { Columns } from "@/components/layout/Columns";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Seo } from "@/components/seo/Seo";
 import { Alert } from "@/components/ui/Alert";
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
-import { TextField } from "@/components/ui/TextField";
+import { Card } from "@/components/ui/Card";
+import { Sheet } from "@/components/ui/Sheet";
 import { authApi } from "@/lib/api/auth";
 import { bulletinApi } from "@/lib/api/bulletin";
 import { listingsApi } from "@/lib/api/listings";
@@ -72,11 +102,59 @@ const SORTERS: Record<SortKey, (a: Listing, b: Listing) => number> = {
 
 /* Decorative dot-grid backdrop for the empty state (Pattern Craft style). */
 const DOT_GRID =
-  "bg-[radial-gradient(circle,_theme(colors.brand.200)_1px,_transparent_1px)] [background-size:16px_16px]";
+  "bg-[radial-gradient(circle,var(--color-brand-200)_1px,transparent_1px)] [background-size:16px_16px]";
+
+/* Shared look for the toolbar's pill controls (search, selects, Filters). */
+const PILL_CONTROL =
+  "glass-card min-h-11 rounded-full border text-sm text-fg shadow-glass transition " +
+  "hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500";
+
+/** A native <select> dressed as a toolbar pill, with a leading icon. */
+function PillSelect({
+  label,
+  icon: Glyph,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  icon: Icon;
+  value: string | number;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="relative block min-w-0">
+      <span className="sr-only">{label}</span>
+      <Glyph
+        aria-hidden="true"
+        className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-fg-muted"
+      />
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={`${PILL_CONTROL} w-full cursor-pointer appearance-none truncate pl-9 pr-9 font-medium focus:outline-2 focus:outline-brand-500`}
+      >
+        {children}
+      </select>
+      <CaretDown
+        aria-hidden="true"
+        weight="bold"
+        className="pointer-events-none absolute right-3.5 top-1/2 z-10 size-3.5 -translate-y-1/2 text-fg-muted"
+      />
+    </label>
+  );
+}
 
 export function FeedPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlQuery = searchParams.get("q") ?? "";
+  // ?category=ID - the listing page's category breadcrumb links here.
+  const rawCategory = searchParams.get("category");
+  const urlCategoryId =
+    rawCategory && /^\d+$/.test(rawCategory) ? Number(rawCategory) : null;
 
   // Reference data (loaded once) + per-category ACTIVE counts for the sidebar.
   const [categories, setCategories] = useState<Category[]>([]);
@@ -93,10 +171,32 @@ export function FeedPage() {
   const [campusId, setCampusId] = useState<number | null>(
     user?.campusId ?? null,
   );
-  const [categoryId, setCategoryId] = useState<number | null>(null);
-  const [searchInput, setSearchInput] = useState("");
-  const [title, setTitle] = useState("");
+  const [categoryId, setCategoryId] = useState<number | null>(urlCategoryId);
+  const [searchInput, setSearchInput] = useState(urlQuery);
+  const [title, setTitle] = useState(urlQuery.trim());
   const [sortKey, setSortKey] = useState<SortKey>("newest");
+
+  // Filters sheet + the (not yet wired) condition picks inside it, kept here
+  // so they survive the sheet closing. See ConditionFilter.tsx.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [condition, setCondition] = useState<ConditionValue>(DEFAULT_CONDITION);
+
+  /*
+    Keep the search box in sync with ?q= (a new TopBar search while the feed
+    is already open). Adjusting state during render when the URL value
+    changes - React's recommended alternative to a syncing effect.
+  */
+  const [syncedQuery, setSyncedQuery] = useState(urlQuery);
+  if (urlQuery !== syncedQuery) {
+    setSyncedQuery(urlQuery);
+    setSearchInput(urlQuery);
+    setTitle(urlQuery.trim());
+  }
+  const [syncedCategory, setSyncedCategory] = useState(urlCategoryId);
+  if (urlCategoryId !== syncedCategory) {
+    setSyncedCategory(urlCategoryId);
+    setCategoryId(urlCategoryId);
+  }
 
   /*
     Results. `listings` stays null until the first successful response arrives;
@@ -249,6 +349,10 @@ export function FeedPage() {
     return [...listings].sort(SORTERS[sortKey]);
   }, [listings, sortKey]);
 
+  const categoryNames: Record<number, string> = {};
+  for (const category of categories)
+    categoryNames[category.categoryId] = category.name;
+
   const activeCampusName =
     campusId !== null ? campusNames[campusId] : undefined;
   const activeCategoryName = categories.find(
@@ -257,6 +361,9 @@ export function FeedPage() {
   const hasActiveFilters = Boolean(
     activeCampusName || activeCategoryName || title,
   );
+  // Only filters that live in the sheet count towards the button badge.
+  const sheetFilterCount = categoryId !== null ? 1 : 0;
+  const firstName = user?.firstName;
 
   function clearAllFilters() {
     setCampusId(null);
@@ -265,208 +372,304 @@ export function FeedPage() {
     setTitle("");
   }
 
-  return (
+  const rail = (
     <>
+      <CampusLiveFeed
+        posts={livePosts ?? []}
+        authorNames={authorNames}
+        loading={livePosts === null}
+      />
+      <SafeExchangeCard />
+      <TrustCallout />
+    </>
+  );
+
+  return (
+    <Columns aside={rail} asideLabel="Campus activity">
+      <Seo
+        title="Marketplace"
+        description="Browse textbooks, tech, stationery and res essentials for sale from verified CPUT students and staff."
+        path="/feed"
+        noindex
+      />
       <PageHeader
-        title="Recent Listings"
+        title="Marketplace"
         subtitle="What's for sale on your campus"
       />
 
+      {/* Facebook-style composer strip: the "sell" entry point. */}
+      <Card padding="sm" className="flex items-center gap-3">
+        <Avatar
+          name={user ? `${user.firstName} ${user.lastName}` : null}
+          className="size-10"
+        />
+        <Link
+          to="/listings/new"
+          className="flex min-h-11 min-w-0 flex-1 items-center rounded-full bg-surface-muted px-4 text-sm text-fg-muted transition hover:bg-gray-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+        >
+          <span className="truncate">
+            What are you selling{firstName ? `, ${firstName}` : ""}?
+          </span>
+        </Link>
+        <Link
+          to="/listings/new"
+          aria-label="Sell with a photo"
+          title="Sell with a photo"
+          className="grid size-11 shrink-0 place-items-center rounded-full text-emerald-600 transition hover:bg-surface-muted active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+        >
+          <Camera aria-hidden="true" weight="fill" className="size-6" />
+        </Link>
+      </Card>
+
       {error && (
-        <Alert tone="error">
-          <div className="flex items-center justify-between gap-3">
-            <span>{error}</span>
-            <button
-              type="button"
-              onClick={() => setRefreshKey((key) => key + 1)}
-              className="shrink-0 font-semibold underline"
-            >
-              Retry
-            </button>
-          </div>
-        </Alert>
+        <div className="mt-4">
+          <Alert tone="error">
+            <div className="flex items-center justify-between gap-3">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => setRefreshKey((key) => key + 1)}
+                className="min-h-9 shrink-0 rounded-lg px-2 font-semibold underline focus-visible:outline-2 focus-visible:outline-brand-500"
+              >
+                Retry
+              </button>
+            </div>
+          </Alert>
+        </div>
       )}
 
-      <div className="mt-2 flex items-start gap-6">
+      {/* Toolbar. Phones: search + Filters on one row, campus + sort under
+          it. sm and up: everything on one row. */}
+      <div
+        role="search"
+        className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center"
+      >
+        <div className="relative min-w-0 sm:flex-1">
+          <label htmlFor="feedSearch" className="sr-only">
+            Search listings
+          </label>
+          <MagnifyingGlass
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4.5 -translate-y-1/2 text-fg-muted"
+          />
+          <input
+            id="feedSearch"
+            name="feedSearch"
+            type="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            placeholder="Search textbooks, electronics…"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            className={`${PILL_CONTROL} w-full pl-10 pr-11 placeholder:text-fg-subtle focus:outline-2 focus:outline-brand-500 [&::-webkit-search-cancel-button]:appearance-none`}
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => setSearchInput("")}
+              aria-label="Clear search"
+              className="absolute right-1 top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full text-fg-muted transition hover:bg-surface-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
+            >
+              <X aria-hidden="true" weight="bold" className="size-4" />
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setFiltersOpen(true)}
+          aria-haspopup="dialog"
+          className={`${PILL_CONTROL} inline-flex items-center gap-2 px-4 font-semibold active:scale-[0.97] sm:order-last`}
+        >
+          <SlidersHorizontal aria-hidden="true" className="size-4.5" />
+          Filters
+          {sheetFilterCount > 0 && (
+            <span className="grid min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs font-bold tabular-nums text-on-primary">
+              {sheetFilterCount}
+              <span className="sr-only"> active</span>
+            </span>
+          )}
+        </button>
+
+        <div className="col-span-2 grid grid-cols-2 gap-2 sm:flex sm:w-auto">
+          <div className="sm:w-40 2xl:w-44">
+            <PillSelect
+              label="Campus"
+              icon={MapPin}
+              value={campusId ?? ""}
+              onChange={(value) =>
+                setCampusId(value === "" ? null : Number(value))
+              }
+            >
+              <option value="">All campuses</option>
+              {campuses.map((campus) => (
+                <option key={campus.campusId} value={campus.campusId}>
+                  {campus.name}
+                </option>
+              ))}
+            </PillSelect>
+          </div>
+          <div className="sm:w-40 2xl:w-44">
+            <PillSelect
+              label="Sort"
+              icon={SortAscending}
+              value={sortKey}
+              onChange={(value) => setSortKey(value as SortKey)}
+            >
+              <option value="newest">Newest</option>
+              <option value="priceAsc">Price: low to high</option>
+              <option value="priceDesc">Price: high to low</option>
+            </PillSelect>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <CategoryChips
+          categories={categories}
+          activeCategoryId={categoryId}
+          onSelectCategory={setCategoryId}
+        />
+      </div>
+
+      {/* Status line matching the mockup's "Showing N active items" row,
+          with a live indicator on the right. Removable filter pills only
+          render once a filter is actually active, same as before. */}
+      {firstLoadDone && !error && sortedListings && (
+        <div className="mt-3 flex items-center justify-between gap-3">
+          {hasActiveFilters ? (
+            <ActiveFilters
+              resultCount={sortedListings.length}
+              campusName={activeCampusName}
+              categoryName={activeCategoryName}
+              search={title || undefined}
+              onClearCampus={() => setCampusId(null)}
+              onClearCategory={() => setCategoryId(null)}
+              onClearSearch={() => setSearchInput("")}
+              onClearAll={clearAllFilters}
+            />
+          ) : (
+            <p className="text-sm font-medium tabular-nums text-fg-muted">
+              Showing {sortedListings.length} active{" "}
+              {sortedListings.length === 1 ? "item" : "items"} on campus
+            </p>
+          )}
+
+          <span className="inline-flex shrink-0 items-center gap-1.5 self-start pt-2 text-xs font-medium text-emerald-700">
+            <span className="relative flex size-1.5" aria-hidden="true">
+              <span className="absolute inset-0 rounded-full bg-emerald-500 motion-safe:animate-ping" />
+              <span className="relative size-1.5 rounded-full bg-emerald-500" />
+            </span>
+            <span className="hidden sm:inline">Real-time feed</span>
+            <span className="sm:hidden">Live</span>
+          </span>
+        </div>
+      )}
+
+      <div className="mt-3">
+        {!firstLoadDone ? (
+          /* First load: skeleton grid, same shape as the real cards
+             (keep these grid classes in sync with ListingGrid). */
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
+            {Array.from({ length: 6 }, (_, index) => (
+              <ListingCardSkeleton key={index} />
+            ))}
+          </div>
+        ) : error ? null : sortedListings === null ||
+          sortedListings.length === 0 ? (
+          <div
+            className="glass-card overflow-hidden rounded-2xl border shadow-glass"
+          >
+            <div className={`${DOT_GRID} px-6 py-10 text-center`}>
+              <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-brand-50 text-brand-700">
+                <Package aria-hidden="true" weight="duotone" className="size-7" />
+              </span>
+              <p className="mt-4 text-base font-semibold text-fg">
+                Nothing for sale here yet
+              </p>
+              <p className="mx-auto mt-1.5 max-w-sm text-sm text-fg-muted">
+                No active listings match these filters. Try another campus or
+                category - or be the first to sell.
+              </p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {hasActiveFilters && (
+                  <Button
+                    variant="secondary"
+                    className="w-auto"
+                    onClick={clearAllFilters}
+                  >
+                    Clear filters
+                  </Button>
+                )}
+                <Button
+                  className="w-auto"
+                  onClick={() => navigate("/listings/new")}
+                >
+                  Sell something
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <ListingGrid
+            listings={sortedListings}
+            campusNames={campusNames}
+            categoryNames={categoryNames}
+          />
+        )}
+      </div>
+
+      {/* Footer prompt, matching the mockup's "didn't find it?" card. */}
+      <Link
+        to="/bulletin"
+        className="glass-card mt-6 flex items-center gap-3 rounded-2xl border border-dashed !border-line-strong p-4 transition hover:!border-brand-300 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 sm:p-5"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-fg-muted">
+            Looking for something specific that isn't listed?
+          </p>
+          <p className="mt-0.5 text-sm font-semibold text-brand-700">
+            Post a "Wanted" request on the Campus Bulletin
+          </p>
+        </div>
+        <ArrowRight aria-hidden="true" className="size-5 shrink-0 text-brand-700" />
+      </Link>
+
+      <Sheet
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Filters"
+        description="Narrow down what's on sale."
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              className="sm:w-auto"
+              onClick={() => {
+                setCategoryId(null);
+                setCondition(DEFAULT_CONDITION);
+              }}
+            >
+              Reset
+            </Button>
+            <Button className="sm:w-auto" onClick={() => setFiltersOpen(false)}>
+              {sortedListings
+                ? `Show ${sortedListings.length} ${sortedListings.length === 1 ? "result" : "results"}`
+                : "Done"}
+            </Button>
+          </>
+        }
+      >
         <FeedSidebar
           categories={categories}
           counts={counts}
           totalActive={totalActive}
           activeCategoryId={categoryId}
           onSelectCategory={setCategoryId}
+          condition={condition}
+          onConditionChange={setCondition}
         />
-
-        <div className="min-w-0 flex-1">
-          {/* The desktop mockup keeps search in the top bar; that area is the
-              shared layout, so ours lives in the page like the mobile mockup. */}
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-            <div className="relative">
-              <TextField
-                label="Search"
-                name="feedSearch"
-                placeholder="Search textbooks, electronics…"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={() => setSearchInput("")}
-                  aria-label="Clear search"
-                  className="absolute right-2.5 top-[38px] text-ink-400 hover:text-ink-700"
-                >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    className="size-4"
-                  >
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[10rem_9rem]">
-              <Select
-                label="Campus"
-                name="feedCampus"
-                value={campusId ?? ""}
-                onChange={(event) =>
-                  setCampusId(
-                    event.target.value === ""
-                      ? null
-                      : Number(event.target.value),
-                  )
-                }
-              >
-                <option value="">All campuses</option>
-                {campuses.map((campus) => (
-                  <option key={campus.campusId} value={campus.campusId}>
-                    {campus.name}
-                  </option>
-                ))}
-              </Select>
-
-              <Select
-                label="Sort"
-                name="feedSort"
-                value={sortKey}
-                onChange={(event) => setSortKey(event.target.value as SortKey)}
-              >
-                <option value="newest">Newest</option>
-                <option value="priceAsc">Price: low to high</option>
-                <option value="priceDesc">Price: high to low</option>
-              </Select>
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <CategoryChips
-              categories={categories}
-              activeCategoryId={categoryId}
-              onSelectCategory={setCategoryId}
-            />
-          </div>
-
-          {/* Status line matching the mockup's "Showing N active items" row,
-              with a live indicator on the right. Removable filter pills only
-              render once a filter is actually active, same as before. */}
-          {firstLoadDone && !error && sortedListings && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-              {hasActiveFilters ? (
-                <ActiveFilters
-                  resultCount={sortedListings.length}
-                  campusName={activeCampusName}
-                  categoryName={activeCategoryName}
-                  search={title || undefined}
-                  onClearCampus={() => setCampusId(null)}
-                  onClearCategory={() => setCategoryId(null)}
-                  onClearSearch={() => setSearchInput("")}
-                  onClearAll={clearAllFilters}
-                />
-              ) : (
-                <p className="text-sm text-ink-500">
-                  Showing {sortedListings.length} active{" "}
-                  {sortedListings.length === 1 ? "item" : "items"} on campus
-                </p>
-              )}
-
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
-                <span
-                  className="size-1.5 rounded-full bg-emerald-500"
-                  aria-hidden="true"
-                />
-                Real-time feed
-              </span>
-            </div>
-          )}
-
-          <div className="mt-4">
-            {!firstLoadDone ? (
-              /* First load: skeleton grid, same shape as the real cards. */
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {Array.from({ length: 6 }, (_, index) => (
-                  <ListingCardSkeleton key={index} />
-                ))}
-              </div>
-            ) : error ? null : sortedListings === null ||
-              sortedListings.length === 0 ? (
-              <div className={`${DOT_GRID} rounded-2xl p-1`}>
-                <div className="rounded-xl bg-white/80 backdrop-blur-[1px]">
-                  <div className="p-8 text-center">
-                    <p className="text-sm font-medium text-ink-700">
-                      Nothing for sale here yet
-                    </p>
-                    <p className="mx-auto mt-1.5 max-w-sm text-sm text-ink-500">
-                      No active listings match these filters. Try another campus
-                      or category - or be the first to sell.
-                    </p>
-                    <div className="mt-4 flex justify-center">
-                      <Button onClick={() => navigate("/listings/new")}>
-                        Sell something
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <ListingGrid
-                listings={sortedListings}
-                campusNames={campusNames}
-              />
-            )}
-          </div>
-
-          {/* Footer prompt, matching the mockup's "didn't find it?" card. */}
-          <div className="mt-6 rounded-2xl border border-dashed border-gray-300 p-6 text-center">
-            <p className="text-sm text-ink-500">
-              Looking for something specific that isn't listed?
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate("/bulletin")}
-              className="mt-1 text-sm font-semibold text-brand-700 hover:text-brand-900"
-            >
-              Post a "Wanted" request on the Campus Bulletin →
-            </button>
-          </div>
-        </div>
-
-        <aside className="hidden w-80 shrink-0 space-y-4 xl:block">
-          <div className="sticky top-24 space-y-4">
-            <CampusLiveFeed
-              posts={livePosts ?? []}
-              authorNames={authorNames}
-              loading={livePosts === null}
-            />
-            <SafeExchangeCard />
-          </div>
-        </aside>
-      </div>
-    </>
+      </Sheet>
+    </Columns>
   );
 }

@@ -7,7 +7,7 @@ type SpinnerProps = {
 
 export function Spinner({ label = 'Loading', className = 'size-6' }: SpinnerProps) {
   return (
-    <span role="status" aria-live="polite" className="inline-flex items-center gap-2 text-ink-500">
+    <span role="status" aria-live="polite" className="inline-flex items-center gap-2 text-fg-muted">
       <svg aria-hidden="true" viewBox="0 0 24 24" className={`${className} animate-spin`}>
         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
         <path

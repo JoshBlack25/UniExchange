@@ -19,6 +19,8 @@ public interface IVendorApplicationService extends IService<VendorApplication, L
 
     List<VendorApplication> findByStatus(VendorApplicationStatus status);
 
+    List<VendorApplication> findByApplicantId(long applicantId);
+
     VendorApplication decide(Long vendorApplicationId, VendorApplicationStatus decision, long reviewedBy, String reviewNote);
 
 }

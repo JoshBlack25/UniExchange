@@ -5,10 +5,16 @@
   with a keyboard and announces itself to a screen reader. Display mode is a
   single labelled image, because eleven separate "star" announcements is noise.
 
+  Each interactive star is a 44px target (thumb-sized on a phone), and the
+  chosen score is echoed as a word beside the stars so it is not colour alone.
+
   Author: Mogamat Yaseen Kannemeyer 240453182
 */
 
+import { Star } from '@phosphor-icons/react'
+
 const VALUES = [1, 2, 3, 4, 5] as const
+const WORDS = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'] as const
 
 type StarRatingProps = {
   value: number
@@ -16,56 +22,56 @@ type StarRatingProps = {
   className?: string
 }
 
-function Star({ filled, className = 'size-5' }: { filled: boolean; className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill={filled ? 'currentColor' : 'none'}
-      stroke="currentColor"
-      strokeWidth="2"
-      aria-hidden="true"
-    >
-      <path
-        d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6-5.4-2.9-5.4 2.9 1-6L3.2 9.4l6.1-.9L12 3z"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 export function StarRating({ value, onChange, className = '' }: StarRatingProps) {
   if (!onChange) {
     return (
       <span
-        className={`inline-flex items-center text-amber-500 ${className}`}
+        className={`inline-flex items-center gap-0.5 ${className}`}
         role="img"
-        aria-label={`${value} out of 5`}
+        aria-label={`${Number.isInteger(value) ? value : value.toFixed(1)} out of 5`}
       >
-        {VALUES.map((star) => (
-          <Star key={star} filled={star <= Math.round(value)} />
-        ))}
+        {VALUES.map((star) => {
+          const filled = star <= Math.round(value)
+          return (
+            <Star
+              key={star}
+              aria-hidden="true"
+              weight="fill"
+              className={`size-5 ${filled ? 'text-amber-500' : 'text-line-strong'}`}
+            />
+          )
+        })}
       </span>
     )
   }
 
   return (
-    <span role="radiogroup" aria-label="Rating" className={`inline-flex items-center gap-1 ${className}`}>
-      {VALUES.map((star) => (
-        <button
-          key={star}
-          type="button"
-          role="radio"
-          aria-checked={value === star}
-          aria-label={`${star} star${star === 1 ? '' : 's'}`}
-          onClick={() => onChange(star)}
-          className={`rounded p-0.5 transition hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
-            star <= value ? 'text-amber-500' : 'text-gray-300'
-          }`}
-        >
-          <Star filled={star <= value} className="size-7" />
-        </button>
-      ))}
+    <span className={`inline-flex flex-wrap items-center gap-x-2 ${className}`}>
+      <span role="radiogroup" aria-label="Rating" className="-ml-1.5 inline-flex items-center">
+        {VALUES.map((star) => {
+          const filled = star <= value
+          return (
+            <button
+              key={star}
+              type="button"
+              role="radio"
+              aria-checked={value === star}
+              aria-label={`${star} star${star === 1 ? '' : 's'}`}
+              onClick={() => onChange(star)}
+              className={
+                'grid size-11 place-items-center rounded-full transition hover:bg-amber-50 active:scale-90 motion-safe:hover:scale-110 ' +
+                'focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500 ' +
+                (filled ? 'text-amber-500' : 'text-line-strong hover:text-amber-500')
+              }
+            >
+              <Star aria-hidden="true" weight={filled ? 'fill' : 'regular'} className="size-7" />
+            </button>
+          )
+        })}
+      </span>
+      <span aria-hidden="true" className="text-sm font-semibold text-amber-700">
+        {WORDS[value] ?? ''}
+      </span>
     </span>
   )
 }

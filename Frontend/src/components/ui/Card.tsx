@@ -1,6 +1,7 @@
 /*
-  The standard white panel. Pass `to` to make the whole card a link - listing
-  cards in the feed want that.
+  The standard panel - a frosted, near-opaque card over the app backdrop.
+  Pass `to` to make the whole card a link - listing cards in the feed want
+  that. Pass `padding="none"` for full-bleed content (post images, lists).
 */
 
 import { Link } from 'react-router-dom'
@@ -10,20 +11,26 @@ type CardProps = {
   children: ReactNode
   /** When set, the card becomes a router link to this path. */
   to?: string
+  padding?: 'none' | 'sm' | 'md'
   className?: string
 }
 
-const BASE = 'block rounded-2xl border border-gray-200 bg-white p-4 shadow-sm'
-const INTERACTIVE = ' transition hover:border-brand-300 hover:shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+const BASE = 'glass-card block rounded-2xl border shadow-glass'
+const PADDING = { none: '', sm: 'p-3', md: 'p-4' } as const
+const INTERACTIVE =
+  ' transition duration-200 hover:border-brand-300 hover:shadow-float motion-safe:hover:-translate-y-0.5 ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500'
 
-export function Card({ children, to, className = '' }: CardProps) {
+export function Card({ children, to, padding = 'md', className = '' }: CardProps) {
+  const classes = `${BASE} ${PADDING[padding]}`
+
   if (to) {
     return (
-      <Link to={to} className={`${BASE}${INTERACTIVE} ${className}`}>
+      <Link to={to} className={`${classes}${INTERACTIVE} ${className}`}>
         {children}
       </Link>
     )
   }
 
-  return <div className={`${BASE} ${className}`}>{children}</div>
+  return <div className={`${classes} ${className}`}>{children}</div>
 }

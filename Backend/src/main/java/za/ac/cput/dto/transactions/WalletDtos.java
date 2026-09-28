@@ -9,6 +9,12 @@
 
 package za.ac.cput.dto.transactions;
 
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,7 +53,12 @@ public final class WalletDtos {
         SIMULATED
     }
 
-    public record TopUpRequest(BigDecimal amount) {}
+    /* The rand caps themselves are configurable, so they are enforced in WalletLimits. */
+    public record TopUpRequest(
+            @NotNull(message = "Enter an amount")
+            @Positive(message = "Enter an amount greater than zero")
+            @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places")
+            BigDecimal amount) {}
 
     /**
      * What the browser must POST to PayFast.
@@ -74,7 +85,14 @@ public final class WalletDtos {
     public record PurchaseRequest(long listingId, BigDecimal expectedAmount) {}
 
     /** Body of POST /api/wallet/transfer. The sender is always the token holder. */
-    public record TransferRequest(String recipientEmail, BigDecimal amount) {}
+    public record TransferRequest(
+            @NotBlank(message = "Enter the recipient's student email")
+            @Size(max = 255, message = "That email is too long")
+            String recipientEmail,
+            @NotNull(message = "Enter an amount")
+            @Positive(message = "Enter an amount greater than zero")
+            @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places")
+            BigDecimal amount) {}
 
     /** balanceAfter is the SENDER's new balance; nothing about the recipient's wallet is revealed. */
     public record TransferResult(BigDecimal amount, String recipientName, BigDecimal balanceAfter) {}

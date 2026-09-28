@@ -13,7 +13,7 @@ export function Alert({ tone = 'error', children }: AlertProps) {
   return (
     <div
       role={tone === 'error' ? 'alert' : 'status'}
-      className={`rounded-lg border px-3.5 py-3 text-sm ${TONES[tone]}`}
+      className={`rounded-xl border px-3.5 py-3 text-sm ${TONES[tone]}`}
     >
       {children}
     </div>

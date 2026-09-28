@@ -38,10 +38,13 @@ public class TransferServiceImpl implements ITransferService {
 
     private final IWalletService walletService;
     private final UserRepository userRepository;
+    private final WalletLimits limits;
 
-    public TransferServiceImpl(IWalletService walletService, UserRepository userRepository) {
+    public TransferServiceImpl(IWalletService walletService, UserRepository userRepository,
+                               WalletLimits limits) {
         this.walletService = walletService;
         this.userRepository = userRepository;
+        this.limits = limits;
     }
 
     @Transactional
@@ -54,6 +57,8 @@ public class TransferServiceImpl implements ITransferService {
         if (Helper.isNullOrEmpty(recipientEmail)) {
             throw new IllegalArgumentException("Enter the recipient's student email");
         }
+        // Per-transfer and rolling 24-hour caps (app.wallet.*).
+        this.limits.checkTransfer(this.walletService.getOrCreateForUser(senderId).getWalletId(), amount);
 
         // Signup only admits lowercase student emails, so lowercase input matches on any collation.
         User recipient = this.userRepository.findByEmail(recipientEmail.trim().toLowerCase(Locale.ROOT))

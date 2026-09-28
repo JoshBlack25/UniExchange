@@ -32,11 +32,10 @@ const TABS: { key: NotificationFilterKey; label: string }[] = [
 ];
 
 const PILL_BASE =
-  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600";
-const PILL_ACTIVE = "border-brand-600 bg-brand-600 text-white";
-const PILL_IDLE =
-  "border-gray-300 bg-white text-ink-700 hover:border-brand-300";
+  "inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-sm font-semibold transition active:scale-[0.97] " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500";
+const PILL_ACTIVE = "border-transparent bg-primary text-on-primary shadow-sm shadow-primary/25";
+const PILL_IDLE = "glass-card text-fg hover:border-brand-300";
 
 export function NotificationFilters({
   active,
@@ -44,17 +43,19 @@ export function NotificationFilters({
   onChange,
 }: NotificationFiltersProps) {
   return (
+    // Toggle buttons (aria-pressed) rather than tabs: they filter one list,
+    // they don't swap between panels. The row bleeds to the screen edge on
+    // phones so it reads as scrollable.
     <div
-      className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
-      role="tablist"
+      role="group"
       aria-label="Filter notifications"
+      className="scroller-x -mx-3 flex gap-2 px-3 py-0.5 sm:mx-0 sm:px-0"
     >
       {TABS.map((tab) => (
         <button
           key={tab.key}
           type="button"
-          role="tab"
-          aria-selected={active === tab.key}
+          aria-pressed={active === tab.key}
           onClick={() => onChange(tab.key)}
           className={`${PILL_BASE} ${active === tab.key ? PILL_ACTIVE : PILL_IDLE}`}
         >
@@ -62,10 +63,10 @@ export function NotificationFilters({
           {tab.key === "UNREAD" && unreadCount > 0 && (
             <span
               className={
-                "grid size-4 place-items-center rounded-full text-[10px] font-semibold " +
+                "grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] font-bold tabular-nums " +
                 (active === tab.key
-                  ? "bg-white/25 text-white"
-                  : "bg-brand-50 text-brand-700")
+                  ? "bg-on-primary/20 text-on-primary"
+                  : "bg-primary text-on-primary")
               }
             >
               {unreadCount > 9 ? "9+" : unreadCount}

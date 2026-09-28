@@ -23,6 +23,7 @@
 */
 
 import { currentToken } from '@/lib/session'
+import { emitAccountSuspended } from '@/lib/accountEvents'
 
 export const BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
@@ -110,9 +111,14 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   if (!response.ok) {
     const envelope = (payload ?? {}) as ErrorEnvelope
+    // Any request from a banned account. Only for a signed-in call - at /login
+    // the page shows the message itself.
+    if (response.status === 403 && envelope.code === 'ACCOUNT_SUSPENDED' && token) {
+      emitAccountSuspended()
+    }
     throw new ApiError(
       response.status,
-      envelope.message ?? fallbackMessage(response.status),
+      envelope.message ?? fallbackMessage(response.status, response.headers.get('Retry-After')),
       envelope.fields ?? {},
       envelope.code,
     )
@@ -164,9 +170,14 @@ export async function authedUpload<T>(path: string, file: File): Promise<T> {
 
   if (!response.ok) {
     const envelope = (payload ?? {}) as ErrorEnvelope
+    // Any request from a banned account. Only for a signed-in call - at /login
+    // the page shows the message itself.
+    if (response.status === 403 && envelope.code === 'ACCOUNT_SUSPENDED' && token) {
+      emitAccountSuspended()
+    }
     throw new ApiError(
       response.status,
-      envelope.message ?? fallbackMessage(response.status),
+      envelope.message ?? fallbackMessage(response.status, response.headers.get('Retry-After')),
       envelope.fields ?? {},
       envelope.code,
     )
@@ -226,7 +237,7 @@ export function authedUploadWithProgress<T>(
       reject(
         new ApiError(
           xhr.status,
-          envelope.message ?? fallbackMessage(xhr.status),
+          envelope.message ?? fallbackMessage(xhr.status, xhr.getResponseHeader('Retry-After')),
           envelope.fields ?? {},
           envelope.code,
         ),
@@ -266,10 +277,26 @@ function safeJson(raw: string): unknown {
   }
 }
 
-function fallbackMessage(status: number): string {
+function fallbackMessage(status: number, retryAfter?: string | null): string {
   // The backend's 401 entry point returns an empty body, so supply the text.
   if (status === 401) return 'Your session has expired. Please sign in again.'
   if (status === 403) return 'You are not allowed to do that.'
   if (status === 404) return 'We could not find that.'
+  if (status === 429) return tooManyRequestsMessage(retryAfter)
   return `Request failed (${status}).`
+}
+
+/*
+  429 from the rate limiter (sign-in, sign-up and OTP attempts, uploads, wallet
+  moves). The backend's own message is preferred when it sends one; this is the
+  fallback. Retry-After is in seconds - it is only readable cross-origin if the
+  API lists it in Access-Control-Expose-Headers, so it may well be null here.
+*/
+function tooManyRequestsMessage(retryAfter?: string | null): string {
+  const seconds = retryAfter ? Number.parseInt(retryAfter, 10) : Number.NaN
+  if (Number.isFinite(seconds) && seconds > 0) {
+    const wait = seconds < 90 ? `${seconds} seconds` : `${Math.ceil(seconds / 60)} minutes`
+    return `Too many attempts. Please wait ${wait} and try again.`
+  }
+  return 'Too many attempts. Please wait a moment and try again.'
 }

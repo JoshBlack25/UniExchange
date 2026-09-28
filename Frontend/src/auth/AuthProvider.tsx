@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { onAccountSuspended, rememberSuspendedNotice } from '@/lib/accountEvents'
 import { authApi } from '@/lib/api/auth'
 import { ApiError } from '@/lib/api/client'
 import type { AuthResponse, User } from '@/lib/api/types'
@@ -41,13 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback((response: AuthResponse, remember: boolean) => {
     const stored: StoredSession = {
       token: response.token,
-      // The backend already sized expiresIn by rememberMe - weeks when ticked,
+      // The backend already sized expiresIn by rememberMe - 7 days when ticked,
       // an hour when not - so this needs no branch of its own.
       expiresAt: Date.now() + response.expiresIn * 1000,
       email: response.email,
       roles: response.roles,
       userId: response.userId,
       remembered: remember,
+      mode: response.mode ?? 'STANDARD',
     }
     writeStoredSession(stored, remember)
 
@@ -60,6 +62,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(stored)
     setUser(null)
   }, [])
+
+  /*
+    A banned account is signed out wherever it is, and the login page is told
+    why (the client emits this for any 403 ACCOUNT_SUSPENDED).
+  */
+  useEffect(
+    () =>
+      onAccountSuspended(() => {
+        rememberSuspendedNotice()
+        signOut()
+      }),
+    [signOut],
+  )
+
+  /*
+    An elevated (moderator/admin) session is short-lived. When it runs out, drop
+    it rather than leaving a page full of controls that now all return 401.
+  */
+  useEffect(() => {
+    if (!session || (session.mode ?? 'STANDARD') === 'STANDARD') return
+    const remaining = session.expiresAt - Date.now()
+    const timer = window.setTimeout(signOut, Math.max(0, remaining))
+    return () => window.clearTimeout(timer)
+  }, [session, signOut])
 
   /*
     Load the profile whenever we hold a session. State is only ever set from the
@@ -98,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: session !== null,
       signIn,
       signOut,
+      updateUser: setUser,
     }),
     [session, user, signIn, signOut],
   )

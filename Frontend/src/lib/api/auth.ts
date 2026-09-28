@@ -14,8 +14,8 @@
   to excess-property checking.
 */
 
-import { request } from './client'
-import type { AuthResponse, Campus, RegistrationResponse, User } from './types'
+import { authedRequest, request } from './client'
+import type { AuthResponse, Campus, RegistrationResponse, SessionMode, User } from './types'
 
 /**
  * What /api/auth/login returns. A `token` means the device was trusted and the
@@ -51,10 +51,22 @@ export const authApi = {
    * `rememberMe` decides both how long the session lasts and how long this
    * browser may skip the code.
    */
-  verifyOtp: (body: { email: string; code: string; rememberMe: boolean }) =>
+  verifyOtp: (body: {
+    email: string
+    code: string
+    rememberMe: boolean
+    mode?: SessionMode
+    loginTicket?: string | null
+  }) =>
     request<AuthResponse>('/api/auth/verify-otp', {
       method: 'POST',
-      body: { email: body.email, code: body.code, rememberMe: body.rememberMe },
+      body: {
+        email: body.email,
+        code: body.code,
+        rememberMe: body.rememberMe,
+        mode: body.mode ?? null,
+        loginTicket: body.loginTicket ?? null,
+      },
     }),
 
   resendOtp: (body: { email: string }) =>
@@ -71,13 +83,18 @@ export const authApi = {
    *   if ('token' in result) signIn(result, rememberMe)   // trusted device
    *   else navigate('/verify', ...)                       // a code was sent
    *
-   * Still throws 403 EMAIL_NOT_VERIFIED when the account never used its first code.
+   * Still throws 403 EMAIL_NOT_VERIFIED when the account never used its first code,
+   * and 403 ACCOUNT_SUSPENDED for a banned account.
+   *
+   * `mode` is only sent by the hidden moderator/admin sign-in. An account without
+   * the role gets the same 401 as a wrong password.
    */
   login: (body: {
     email: string
     password: string
     deviceToken: string | null
     rememberMe: boolean
+    mode?: SessionMode
   }) =>
     request<LoginResult>('/api/auth/login', {
       method: 'POST',
@@ -85,6 +102,32 @@ export const authApi = {
         email: body.email,
         password: body.password,
         deviceToken: body.deviceToken,
+        rememberMe: body.rememberMe,
+        mode: body.mode ?? null,
+      },
+    }),
+
+  /** Re-enter the password to switch an open session into moderator or admin mode. */
+  elevate: (body: { password: string; mode: Exclude<SessionMode, 'STANDARD'> }) =>
+    authedRequest<AuthResponse>('/api/auth/elevate', {
+      method: 'POST',
+      body: { password: body.password, mode: body.mode },
+    }),
+
+  /** Leave moderator/admin mode and carry on as an ordinary session. */
+  stepDown: (body: { rememberMe: boolean }) =>
+    authedRequest<AuthResponse>('/api/auth/step-down', {
+      method: 'POST',
+      body: { rememberMe: body.rememberMe },
+    }),
+
+  /** Returns a fresh token for this session; every other session is signed out. */
+  changePassword: (body: { currentPassword: string; newPassword: string; rememberMe: boolean }) =>
+    authedRequest<AuthResponse>('/api/auth/change-password', {
+      method: 'POST',
+      body: {
+        currentPassword: body.currentPassword,
+        newPassword: body.newPassword,
         rememberMe: body.rememberMe,
       },
     }),

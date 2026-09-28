@@ -23,3 +23,19 @@ export function isValidAmount(raw: string): boolean {
   if (!/^\d+(\.\d{1,2})?$/.test(raw.trim())) return false
   return Number(raw) > 0
 }
+
+/*
+  Per-transaction caps, mirroring the backend's app.wallet.max-topup and
+  app.wallet.max-transfer (R5 000 each; there is also a R10 000 rolling 24-hour
+  limit per kind, which only the server can check). Checked here too so a
+  student sees the rule before the request, not as a 400 afterwards.
+*/
+export const MAX_TOPUP = 5000
+export const MAX_TRANSFER = 5000
+/** Rolling 24 hours, per kind (top-ups, transfers). Enforced server-side only. */
+export const MAX_DAILY = 10000
+
+/** True when a (valid) string amount is above `max` rand. */
+export function exceedsLimit(raw: string, max: number): boolean {
+  return Number(raw) > max
+}

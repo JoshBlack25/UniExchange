@@ -10,6 +10,8 @@
 
 package za.ac.cput.dto.trust;
 
+import jakarta.validation.constraints.Size;
+
 import za.ac.cput.domain.enums.ReportStatus;
 import za.ac.cput.domain.enums.ReportTargetType;
 
@@ -17,6 +19,6 @@ public record ReportRequest(
         long reporterId,
         ReportTargetType targetType,
         long targetId,
-        String reason,
+        @Size(max = 500, message = "Keep the reason under 500 characters") String reason,
         ReportStatus status) {
 }

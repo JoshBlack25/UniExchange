@@ -10,6 +10,7 @@
 package za.ac.cput.domain.identity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,7 +20,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import za.ac.cput.domain.enums.AccountStatus;
+import za.ac.cput.util.Helper;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -69,6 +72,22 @@ public class User {
     @Column(nullable = false, name = "updated_at")
     private LocalDateTime updatedAt;
 
+    /*
+     When the password last changed or the account was locked. Any JWT issued
+     before this instant is rejected by JwtAuthenticationFilter, which is how a
+     password reset or a ban signs the user out everywhere.
+    */
+    @Column(name = "credentials_changed_at")
+    private LocalDateTime credentialsChangedAt;
+
+    /*
+     When the profile photo last changed; null when there is none. The bytes
+     live in ProfilePhoto, NOT here - this row is loaded on every request by
+     the JWT filter, and must stay small.
+    */
+    @Column(name = "photo_updated_at")
+    private LocalDateTime photoUpdatedAt;
+
     //  Constructors
     protected User() {
         // Required by JPA
@@ -88,6 +107,8 @@ public class User {
         this.campusId = builder.campusId;
         this.createdAt = builder.createdAt;
         this.updatedAt = builder.updatedAt;
+        this.credentialsChangedAt = builder.credentialsChangedAt;
+        this.photoUpdatedAt = builder.photoUpdatedAt;
     }
 
     //  Getters
@@ -144,6 +165,35 @@ public class User {
         return updatedAt;
     }
 
+    @JsonIgnore
+    public LocalDateTime getCredentialsChangedAt() {
+        return credentialsChangedAt;
+    }
+
+    @JsonIgnore
+    public LocalDateTime getPhotoUpdatedAt() {
+        return photoUpdatedAt;
+    }
+
+    /*
+     Where the profile photo is served, relative to the API. The version makes
+     the URL change whenever the photo does, so it can be cached for good.
+    */
+    @Transient
+    @JsonProperty("profilePhotoUrl")
+    public String getProfilePhotoUrl() {
+        return photoUpdatedAt == null
+                ? null
+                : "/api/profile-photos/" + userId + "?v=" + photoUpdatedAt.toString().replaceAll("[^0-9]", "");
+    }
+
+    /** STAFF for an @cput.ac.za address, STUDENT otherwise. Drives the profile badge. */
+    @Transient
+    @JsonProperty("affiliation")
+    public String getAffiliation() {
+        return Helper.isStaffEmail(email) ? "STAFF" : "STUDENT";
+    }
+
     //  toString
     @Override
     public String toString() {
@@ -182,6 +232,8 @@ public class User {
         private Long campusId;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
+        private LocalDateTime credentialsChangedAt;
+        private LocalDateTime photoUpdatedAt;
 
         //  Setters
         public Builder setUserId(long userId) {
@@ -249,6 +301,16 @@ public class User {
             return this;
         }
 
+        public Builder setCredentialsChangedAt(LocalDateTime credentialsChangedAt) {
+            this.credentialsChangedAt = credentialsChangedAt;
+            return this;
+        }
+
+        public Builder setPhotoUpdatedAt(LocalDateTime photoUpdatedAt) {
+            this.photoUpdatedAt = photoUpdatedAt;
+            return this;
+        }
+
         public Builder copy(User user) {
             this.userId = user.userId;
             this.email = user.email;
@@ -263,6 +325,8 @@ public class User {
             this.campusId = user.campusId;
             this.createdAt = user.createdAt;
             this.updatedAt = user.updatedAt;
+            this.credentialsChangedAt = user.credentialsChangedAt;
+            this.photoUpdatedAt = user.photoUpdatedAt;
             return this;
         }
 

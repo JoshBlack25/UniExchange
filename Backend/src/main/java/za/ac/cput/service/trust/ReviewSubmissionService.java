@@ -17,18 +17,22 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.UnexpectedRollbackException;
 
+import za.ac.cput.domain.enums.RoleType;
 import za.ac.cput.domain.enums.TransactionStatus;
 import za.ac.cput.domain.transactions.Transaction;
 import za.ac.cput.domain.trust.Review;
 import za.ac.cput.exception.ConflictException;
 import za.ac.cput.factory.trust.ReviewFactory;
+import za.ac.cput.repository.identity.UserRepository;
 import za.ac.cput.repository.transactions.TransactionRepository;
 import za.ac.cput.repository.trust.ReviewRepository;
 import za.ac.cput.service.communication.NotificationPublisher;
+import za.ac.cput.service.identity.RoleAssignmentService;
 
 @Service
 public class ReviewSubmissionService {
@@ -39,15 +43,24 @@ public class ReviewSubmissionService {
     private final TransactionRepository transactionRepository;
     private final TrustScoreService trustScoreService;
     private final NotificationPublisher notifications;
+    private final RoleAssignmentService roles;
+    private final UserRepository users;
+    private final int badReviewThreshold;
 
     public ReviewSubmissionService(ReviewRepository reviewRepository,
                                    TransactionRepository transactionRepository,
                                    TrustScoreService trustScoreService,
-                                   NotificationPublisher notifications) {
+                                   NotificationPublisher notifications,
+                                   RoleAssignmentService roles,
+                                   UserRepository users,
+                                   @Value("${app.moderation.bad-review-threshold:2}") int badReviewThreshold) {
         this.reviewRepository = reviewRepository;
         this.transactionRepository = transactionRepository;
         this.trustScoreService = trustScoreService;
         this.notifications = notifications;
+        this.roles = roles;
+        this.users = users;
+        this.badReviewThreshold = badReviewThreshold;
     }
 
     /**
@@ -112,6 +125,10 @@ public class ReviewSubmissionService {
 
         this.notifications.reviewReceived(revieweeId, rating, transactionId);
 
+        if (rating <= this.badReviewThreshold) {
+            flagForModerators(saved, revieweeId);
+        }
+
         /*
          Badge evaluation runs in its own transaction and must never be able to undo
          the review: the review is the student's data, the badge is only derived
@@ -128,6 +145,24 @@ public class ReviewSubmissionService {
         }
 
         return saved;
+    }
+
+    /*
+     A low rating can mean a scam, a no-show or abuse, so every moderator and
+     admin hears about it. The alert can never fail the review: publish()
+     swallows its own errors, and the lookups here are guarded too.
+    */
+    private void flagForModerators(Review review, long revieweeId) {
+        try {
+            java.util.Set<Long> recipients = new java.util.LinkedHashSet<>(this.roles.userIdsWith(RoleType.MODERATOR));
+            recipients.addAll(this.roles.userIdsWith(RoleType.ADMIN));
+            String revieweeName = this.users.findById(revieweeId)
+                    .map(user -> user.getFirstName() + " " + user.getLastName())
+                    .orElse("A user");
+            this.notifications.badReviewFlagged(recipients, review.getReviewId(), review.getRating(), revieweeName);
+        } catch (RuntimeException ex) {
+            log.warn("Could not alert moderators about review {}: {}", review.getReviewId(), ex.getMessage());
+        }
     }
 
     /** Completed transactions this user was part of and has not yet reviewed. */

@@ -47,11 +47,11 @@ export function ReviewForm({ transactionId, subject, onDone }: ReviewFormProps) 
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-xl bg-gray-50 p-4">
+    <form onSubmit={submit} className="space-y-4 rounded-2xl border border-line bg-surface-muted/60 p-4">
       {error && <Alert tone="error">{error}</Alert>}
 
       <div>
-        <span className="mb-1 block text-sm font-medium text-ink-700">
+        <span className="block text-sm font-semibold text-fg">
           How was your experience with {subject}?
         </span>
         <StarRating value={rating} onChange={setRating} />
@@ -66,7 +66,7 @@ export function ReviewForm({ transactionId, subject, onDone }: ReviewFormProps) 
         placeholder="Was the item as described? Did they show up on time?"
       />
 
-      <Button type="submit" loading={submitting} className="w-auto px-4">
+      <Button type="submit" loading={submitting} className="sm:w-auto">
         Submit review
       </Button>
     </form>

@@ -11,9 +11,11 @@
   Author: Mogamat Yaseen Kannemeyer 240453182
 */
 
+import { DownloadSimple, Pause, Play } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 
 import type { ChatMediaView } from '@/lib/api/types'
+import { safeUrl } from '@/lib/safeUrl'
 
 type VoiceNotePlayerProps = {
   media: ChatMediaView
@@ -81,73 +83,82 @@ export function VoiceNotePlayer({ media, mine }: VoiceNotePlayerProps) {
   if (unplayable) {
     return (
       <a
-        href={media.url}
+        href={safeUrl(media.url)}
         download
-        className={`flex items-center gap-2 text-sm underline ${mine ? 'text-white' : 'text-brand-700'}`}
+        className={`flex min-h-11 items-center gap-2 rounded-xl text-sm font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-brand-500 ${
+          mine ? 'text-on-primary' : 'text-brand-700'
+        }`}
       >
-        <DownloadIcon className="size-4" />
+        <DownloadSimple aria-hidden="true" className="size-5" />
         Download voice note ({formatClock(durationMs)})
       </a>
     )
   }
 
   return (
-    <div className="flex min-w-52 items-center gap-3">
+    <div className="flex w-56 max-w-full items-center gap-3 sm:w-64">
       {/* preload="metadata" keeps the thread cheap to open - the bytes only
           arrive when someone actually presses play. */}
-      <audio ref={audioRef} src={media.url} preload="metadata" />
+      <audio ref={audioRef} src={safeUrl(media.url)} preload="metadata" />
 
       <button
         type="button"
         onClick={toggle}
         aria-label={playing ? 'Pause voice note' : 'Play voice note'}
-        className={`grid size-9 shrink-0 place-items-center rounded-full transition ${
-          mine ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-brand-100 text-brand-800 hover:bg-brand-200'
+        className={`grid size-11 shrink-0 place-items-center rounded-full transition active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
+          mine
+            ? 'bg-on-primary text-primary hover:bg-on-primary/90'
+            : 'bg-primary text-on-primary hover:bg-primary-hover'
         }`}
       >
-        {playing ? <PauseIcon className="size-4" /> : <PlayIcon className="size-4" />}
+        {playing ? (
+          <Pause aria-hidden="true" weight="fill" className="size-5" />
+        ) : (
+          <Play aria-hidden="true" weight="fill" className="ml-0.5 size-5" />
+        )}
       </button>
 
-      <div className="flex-1">
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={progress}
-          onChange={seek}
-          aria-label="Seek within voice note"
-          className={`h-1 w-full cursor-pointer appearance-none rounded-full ${
-            mine ? 'bg-white/30 accent-white' : 'bg-brand-100 accent-brand-600'
-          }`}
-        />
-        <span className={`mt-1 block text-xs tabular-nums ${mine ? 'text-white/80' : 'text-ink-500'}`}>
+      <div className="min-w-0 flex-1">
+        {/* Our own track and fill, with the real range input laid invisibly
+            on top - it still takes the pointer, the keyboard and the screen
+            reader, so scrubbing works everywhere and looks the same in every
+            browser and theme. */}
+        <div className="relative flex h-6 items-center">
+          <div
+            aria-hidden="true"
+            className={`h-1.5 w-full overflow-hidden rounded-full ${mine ? 'bg-on-primary/30' : 'bg-line-strong'}`}
+          >
+            <div
+              className={`h-full rounded-full ${mine ? 'bg-on-primary' : 'bg-primary'}`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow ${
+              mine ? 'bg-on-primary' : 'bg-primary'
+            } ${playing || positionMs > 0 ? 'opacity-100' : 'opacity-0'} transition-opacity`}
+            style={{ left: `${progress}%` }}
+          />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={progress}
+            onChange={seek}
+            aria-label="Seek within voice note"
+            aria-valuetext={`${formatClock(positionMs)} of ${formatClock(durationMs)}`}
+            className="peer absolute inset-0 size-full cursor-pointer appearance-none opacity-0"
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -inset-x-1 inset-y-0 rounded-full peer-focus-visible:outline-2 peer-focus-visible:outline-brand-500"
+          />
+        </div>
+        <span className={`block text-xs font-medium tabular-nums ${mine ? 'text-on-primary/85' : 'text-fg-muted'}`}>
           {formatClock(playing || positionMs > 0 ? positionMs : durationMs)}
         </span>
       </div>
     </div>
-  )
-}
-
-function PlayIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M6 4l14 8-14 8V4z" fill="currentColor" stroke="none" />
-    </svg>
-  )
-}
-
-function PauseIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M7 4h3v16H7zM14 4h3v16h-3z" fill="currentColor" stroke="none" />
-    </svg>
-  )
-}
-
-function DownloadIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   )
 }

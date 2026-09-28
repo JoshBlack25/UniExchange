@@ -19,6 +19,8 @@
 
 package za.ac.cput.dto.communication;
 
+import jakarta.validation.constraints.Size;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -32,7 +34,9 @@ public final class ChatDtos {
     public record StartThreadRequest(long otherUserId, Long listingId) {}
 
     /** Body of POST /api/chat/threads/{id}/messages. Either field may be absent, but not both. */
-    public record SendMessageRequest(String content, Long mediaId) {}
+    public record SendMessageRequest(
+            @Size(max = 2000, message = "Keep messages under 2000 characters") String content,
+            Long mediaId) {}
 
     /** The other person in a thread. Never carries an email - that is not the counterparty's business. */
     public record ChatParticipant(long userId, String firstName, String lastName) {}

@@ -53,13 +53,15 @@ public class ListingServiceImpl implements IListingService {
 
     @Override
     public boolean delete(Long id) {
-        if (id == null || !this.repository.existsById(id)) {
+        Listing listing = id == null ? null : this.repository.findById(id).orElse(null);
+        if (listing == null) {
             return false;
         }
 
         for (ListingImage image : this.imageService.findByListingId(id)) {
             this.imageService.delete(image.getImageId());
-            this.storage.deleteIfManaged(image.getImageUrl());
+            // Only files the seller uploaded; see LocalFileStorage.
+            this.storage.deleteIfManaged(image.getImageUrl(), listing.getSellerId());
         }
 
         this.repository.deleteById(id);

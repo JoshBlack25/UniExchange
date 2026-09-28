@@ -5,7 +5,15 @@
 
  create/update/delete confirm that the caller owns the PARENT listing before
  attaching/changing/removing an image on it, mirroring the ownership check in
- ListingController and BulletinPostImageController.
+ ListingController and BulletinPostImageController. update also checks the
+ TARGET listing, or an image could be moved onto someone else's listing.
+
+ A client-supplied imageUrl must be an /uploads/... file the caller uploaded
+ (LocalFileStorage records the owner). Anything else - another student's file,
+ an external or javascript: URL - is refused with a 400.
+
+ Uploaded bytes are served back with the type detected from the bytes, never the
+ type the client declared.
 
  Author: Aidan Barends 230255639
  Date: 21 September 2026
@@ -14,8 +22,10 @@
 package za.ac.cput.controller.marketplace;
 
 import java.util.List;
+import java.util.Objects;
 import java.io.IOException;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +50,8 @@ import za.ac.cput.security.UniExchangeUserDetailsService.AuthenticatedUser;
 import za.ac.cput.service.marketplace.IListingImageService;
 import za.ac.cput.service.marketplace.IListingService;
 import za.ac.cput.service.marketplace.ListingImageStorageService;
+import za.ac.cput.storage.LocalFileStorage;
+import za.ac.cput.util.ImageTypeDetector;
 
 @RestController
 @RequestMapping("/api/listing-images")
@@ -48,12 +60,14 @@ public class ListingImageController {
     private final IListingImageService service;
     private final IListingService listingService;
     private final ListingImageStorageService storageService;
+    private final LocalFileStorage uploads;
 
     public ListingImageController(IListingImageService service, IListingService listingService,
-                                   ListingImageStorageService storageService) {
+                                   ListingImageStorageService storageService, LocalFileStorage uploads) {
         this.service = service;
         this.listingService = listingService;
         this.storageService = storageService;
+        this.uploads = uploads;
     }
 
     @PostMapping
@@ -66,6 +80,7 @@ public class ListingImageController {
         if (listing.getSellerId() != principal.getUser().getUserId()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
+        requireOwnUpload(request.imageUrl(), principal);
         ListingImage created = this.service.create(ListingImageFactory.createListingImage(
                 request.listingId(), request.imageUrl(), request.position(), request.isPrimary()));
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
@@ -84,7 +99,7 @@ public class ListingImageController {
         if (listing.getSellerId() != principal.getUser().getUserId()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        this.storageService.validate(file);
+        String contentType = this.storageService.detectedType(file);
         String fileName = this.storageService.fileName(file);
         String imageUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
                 .path("/api/listing-images/files/")
@@ -97,7 +112,7 @@ public class ListingImageController {
                 .setPosition(position)
                 .setPrimary(isPrimary)
                 .setImageData(file.getBytes())
-                .setContentType(file.getContentType())
+                .setContentType(contentType)
                 .build());
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
@@ -112,8 +127,14 @@ public class ListingImageController {
         if (image == null || image.getImageData() == null) {
             return ResponseEntity.notFound().build();
         }
+        // Re-detected on every read: rows saved before B7 carry the client's claimed type.
+        String type = ImageTypeDetector.detect(image.getImageData()).orElse(null);
+        if (type == null) {
+            return ResponseEntity.notFound().build();
+        }
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(image.getContentType()))
+                .contentType(MediaType.parseMediaType(type))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                 .body(image.getImageData());
     }
 
@@ -131,8 +152,12 @@ public class ListingImageController {
         if (existing == null) {
             return ResponseEntity.notFound().build();
         }
-        if (!isOwner(existing.getListingId(), principal)) {
+        // Both the listing it is on now AND the one it would move to.
+        if (!isOwner(existing.getListingId(), principal) || !isOwner(request.listingId(), principal)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        if (!Objects.equals(existing.getImageUrl(), request.imageUrl())) {
+            requireOwnUpload(request.imageUrl(), principal);
         }
         return ResponseEntity.ok(this.service.update(ListingImageFactory.updateListingImage(
                 existing, request.listingId(), request.imageUrl(), request.position(), request.isPrimary())));
@@ -161,6 +186,12 @@ public class ListingImageController {
     @GetMapping("/listing/{listingId}")
     public List<ListingImage> byListing(@PathVariable long listingId) {
         return this.service.findByListingId(listingId);
+    }
+
+    private void requireOwnUpload(String imageUrl, AuthenticatedUser principal) {
+        if (!this.uploads.isOwnedBy(imageUrl, principal.getUser().getUserId())) {
+            throw new IllegalArgumentException("Upload the image first; only your own uploads can be attached");
+        }
     }
 
     private boolean isOwner(long listingId, AuthenticatedUser principal) {
