@@ -13,6 +13,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,8 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import za.ac.cput.domain.enums.AccountStatus;
 import za.ac.cput.domain.identity.User;
+import za.ac.cput.dto.identity.PublicUserProfile;
 import za.ac.cput.dto.identity.UserRequest;
 import za.ac.cput.factory.identity.UserFactory;
+import za.ac.cput.security.UniExchangeUserDetailsService.AuthenticatedUser;
 import za.ac.cput.service.identity.IUserService;
 
 @RestController
@@ -47,10 +50,20 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    /*
+     The one endpoint here open to every signed-in user (SecurityConfig). Anyone but
+     staff (and the user themselves) gets the public view only: no email, phone
+     number or date of birth.
+    */
     @GetMapping("/{id}")
-    public ResponseEntity<User> read(@PathVariable Long id) {
+    public ResponseEntity<?> read(@PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser principal) {
         User found = this.service.read(id);
-        return found == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(found);
+        if (found == null) {
+            return ResponseEntity.notFound().build();
+        }
+        boolean fullView = principal != null
+                && (principal.isModerating() || principal.getUser().getUserId() == found.getUserId());
+        return fullView ? ResponseEntity.ok(found) : ResponseEntity.ok(PublicUserProfile.of(found));
     }
 
     @PutMapping("/{id}")

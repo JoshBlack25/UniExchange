@@ -11,6 +11,8 @@ you move something there, say so in the group chat so the others can use it.
 
 | File | |
 |---|---|
+| `ConversationList.tsx` | The inbox (fetch, poll, search). Rendered by /messages and, from lg, beside the chat on /messages/:id |
+| `useMediaQuery.ts` | Lets ChatPage mount the inbox pane only at lg, so phones don't poll it |
 | `MessageBubble.tsx` | One message, with its image / video / voice-note attachment |
 | `MessageComposer.tsx` | Text, attach, and hold-to-record. Uploads before sending |
 | `VoiceNotePlayer.tsx` | Custom transport for voice notes |

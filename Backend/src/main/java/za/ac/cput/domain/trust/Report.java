@@ -17,6 +17,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import za.ac.cput.domain.enums.ReportReason;
 import za.ac.cput.domain.enums.ReportStatus;
 import za.ac.cput.domain.enums.ReportTargetType;
 
@@ -42,6 +43,13 @@ public class Report {
 
     @Column(nullable = false, length = 500)
     private String reason;
+
+    // The dropdown choice. Nullable: reports filed before categories existed
+    // have only the free-text reason. varchar, not a MySQL ENUM, so new values
+    // never need a schema change (ddl-auto=update does not alter ENUMs).
+    @Enumerated(EnumType.STRING)
+    @Column(length = 40, columnDefinition = "varchar(40)")
+    private ReportReason category;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -70,6 +78,7 @@ public class Report {
         this.targetType = builder.targetType;
         this.targetId = builder.targetId;
         this.reason = builder.reason;
+        this.category = builder.category;
         this.status = builder.status;
         this.handledBy = builder.handledBy;
         this.resolutionNote = builder.resolutionNote;
@@ -96,6 +105,10 @@ public class Report {
 
     public String getReason() {
         return reason;
+    }
+
+    public ReportReason getCategory() {
+        return category;
     }
 
     public ReportStatus getStatus() {
@@ -144,6 +157,7 @@ public class Report {
         private ReportTargetType targetType;
         private long targetId;
         private String reason;
+        private ReportReason category;
         private ReportStatus status;
         private Long handledBy;
         private String resolutionNote;
@@ -173,6 +187,11 @@ public class Report {
 
         public Builder setReason(String reason) {
             this.reason = reason;
+            return this;
+        }
+
+        public Builder setCategory(ReportReason category) {
+            this.category = category;
             return this;
         }
 
@@ -207,6 +226,7 @@ public class Report {
             this.targetType = report.targetType;
             this.targetId = report.targetId;
             this.reason = report.reason;
+            this.category = report.category;
             this.status = report.status;
             this.handledBy = report.handledBy;
             this.resolutionNote = report.resolutionNote;

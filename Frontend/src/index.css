@@ -5,8 +5,33 @@
 
   Tailwind v4 is configured here, in CSS, rather than in a tailwind.config.js -
   the @theme block below defines real Tailwind utilities (bg-brand-600,
-  text-ink-500, ...). There is no PostCSS chain; the Vite plugin handles it.
+  text-ink-500, bg-surface, ...). There is no PostCSS chain; the Vite plugin
+  handles it.
+
+  THEMING - how dark mode works, read this before adding colours:
+
+  1. Dark mode is class based: lib/theme.ts puts `.dark` on <html>. Use the
+     `dark:` variant only when a token below cannot express what you need.
+
+  2. Prefer the SEMANTIC tokens for new code - they already flip per theme:
+       bg-canvas            the page base, under the gradient backdrop
+       bg-surface           cards, inputs, anything opaque
+       bg-surface-muted     inset areas, skeletons, hover rows
+       bg-glass(-strong)    frosted chrome - pair with backdrop-blur
+       border-line(-strong) hairlines / input borders
+       text-fg, text-fg-muted, text-fg-subtle
+       bg-primary / text-on-primary / bg-primary-hover   solid brand buttons
+
+  3. The palette scales (gray, ink, brand, red, emerald, amber) are also
+     re-toned under `.dark`: the light tints (50-200) become dim tints and the
+     dark text shades (600-900) become light ones. So `bg-red-50 text-red-700`
+     is a readable pill in BOTH themes without a dark: variant. That is why a
+     solid button must use bg-primary, not bg-brand-600 - the latter turns
+     into a light text shade in dark mode.
 */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* CPUT-adjacent teal/blue, not the Vite template purple. */
   --color-brand-50: #eef7fb;
@@ -26,6 +51,206 @@
   --color-ink-900: #161a21;
 
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --shadow-glass: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.18);
+  --shadow-float: 0 2px 6px rgb(15 23 42 / 0.06), 0 20px 48px -16px rgb(15 23 42 / 0.32);
+
+  --animate-sheet-up: sheet-up 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-sheet-left: sheet-left 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade-in: fade-in 180ms ease-out;
+  --animate-pop-in: pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes sheet-left {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+}
+
+/* Semantic tokens - values live in :root / .dark below. */
+@theme inline {
+  --color-canvas: var(--ux-canvas);
+  --color-surface: var(--ux-surface);
+  --color-surface-muted: var(--ux-surface-muted);
+  --color-glass: var(--ux-glass);
+  --color-glass-strong: var(--ux-glass-strong);
+  --color-line: var(--ux-line);
+  --color-line-strong: var(--ux-line-strong);
+  --color-fg: var(--ux-fg);
+  --color-fg-muted: var(--ux-fg-muted);
+  --color-fg-subtle: var(--ux-fg-subtle);
+  --color-primary: var(--ux-primary);
+  --color-primary-hover: var(--ux-primary-hover);
+  --color-on-primary: #ffffff;
+  --color-danger: var(--ux-danger);
+  --color-danger-hover: var(--ux-danger-hover);
+}
+
+:root {
+  color-scheme: light;
+
+  --ux-canvas: #f0f4f7;
+  --ux-surface: #ffffff;
+  --ux-surface-muted: #f3f6f8;
+  --ux-glass: rgb(255 255 255 / 0.62);
+  --ux-glass-strong: rgb(255 255 255 / 0.82);
+  --ux-glass-border: rgb(255 255 255 / 0.55);
+  --ux-line: #e3e8ee;
+  --ux-line-strong: #cfd6de;
+  --ux-fg: #161a21;
+  --ux-fg-muted: #4b5563;
+  --ux-fg-subtle: #6b7280;
+  --ux-primary: #16658a;
+  --ux-primary-hover: #135070;
+  --ux-danger: #dc2626;
+  --ux-danger-hover: #b91c1c;
+
+  /*
+    Chart series (categorical, fixed order - a series keeps its slot whatever
+    else is shown). Validated with the dataviz palette checker against this
+    theme's surface: CVD and normal-vision separation pass all-pairs.
+    Slot 3 is 2.8:1 on white, so every chart also ships a data table.
+  */
+  --ux-series-1: #2a78d6;
+  --ux-series-2: #eb6834;
+  --ux-series-3: #1baf7a;
+  --ux-chart-grid: #e3e8ee;
+  --ux-chart-axis: #6b7280;
+
+  --ux-blob-1: rgb(59 157 192 / 0.28);
+  --ux-blob-2: rgb(111 188 216 / 0.26);
+  --ux-blob-3: rgb(167 139 250 / 0.14);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --ux-canvas: #0b1220;
+  --ux-surface: #121b2a;
+  --ux-surface-muted: #1a2536;
+  --ux-glass: rgb(18 27 42 / 0.58);
+  --ux-glass-strong: rgb(18 27 42 / 0.82);
+  --ux-glass-border: rgb(255 255 255 / 0.08);
+  --ux-line: #243044;
+  --ux-line-strong: #334158;
+  --ux-fg: #eef2f6;
+  --ux-fg-muted: #b3bcca;
+  --ux-fg-subtle: #8e99ab;
+  /* Lighter than light-mode primary, still >= 4.5:1 against white text. */
+  --ux-primary: #1b789f;
+  --ux-primary-hover: #1f86ad;
+  --ux-danger: #dc2626;
+  --ux-danger-hover: #ef4444;
+
+  /* Stepped for the dark surface, not flipped; validated against #121b2a. */
+  --ux-series-1: #3987e5;
+  --ux-series-2: #d95926;
+  --ux-series-3: #199e70;
+  --ux-chart-grid: #243044;
+  --ux-chart-axis: #8e99ab;
+
+  --ux-blob-1: rgb(31 127 164 / 0.26);
+  --ux-blob-2: rgb(19 80 112 / 0.34);
+  --ux-blob-3: rgb(99 102 241 / 0.12);
+
+  /* Re-toned scales - see note 3 at the top of this file. */
+  --color-ink-400: #8e99ab;
+  --color-ink-500: #b3bcca;
+  --color-ink-700: #d6dce5;
+  --color-ink-900: #eef2f6;
+
+  --color-gray-50: #162030;
+  --color-gray-100: #1a2536;
+  --color-gray-200: #243044;
+  --color-gray-300: #334158;
+  --color-gray-400: #7d889b;
+  --color-gray-500: #98a2b3;
+
+  --color-brand-50: #102a37;
+  --color-brand-100: #133446;
+  --color-brand-200: #1b4a60;
+  --color-brand-300: #2a6b89;
+  --color-brand-600: #5bb4d6;
+  --color-brand-700: #7cc6e2;
+  --color-brand-800: #a9d8ea;
+  --color-brand-900: #d4ecf5;
+
+  --color-red-50: #2a1519;
+  --color-red-100: #3a1a1f;
+  --color-red-200: #5b242b;
+  --color-red-300: #8a3039;
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+
+  --color-emerald-50: #0f2a24;
+  --color-emerald-100: #12352d;
+  --color-emerald-200: #1a4d40;
+  --color-emerald-300: #23705c;
+  --color-emerald-600: #34d399;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+
+  --color-amber-50: #2b2110;
+  --color-amber-100: #3a2c12;
+  --color-amber-200: #5a4318;
+  --color-amber-300: #85621f;
+  --color-amber-600: #fbbf24;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+}
+
+/*
+  Frosted glass. `glass` is for chrome (top bar, nav, menus, sheets);
+  `glass-card` is for content and stays near-opaque so body text keeps a
+  4.5:1 contrast over any part of the backdrop.
+*/
+@utility glass {
+  background-color: var(--ux-glass);
+  border-color: var(--ux-glass-border);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+@utility glass-strong {
+  background-color: var(--ux-glass-strong);
+  border-color: var(--ux-glass-border);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+}
+
+@utility glass-card {
+  background-color: color-mix(in oklab, var(--ux-surface) 88%, transparent);
+  border-color: color-mix(in oklab, var(--ux-line) 80%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+/* Horizontal chip rows: scroll with no visible bar, fade at the edges. */
+@utility scroller-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /*
@@ -40,8 +265,70 @@ body,
 
 body {
   margin: 0;
+  background-color: var(--ux-canvas);
+  color: var(--ux-fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[role="button"],
+a,
+label[for],
+select,
+summary {
+  touch-action: manipulation;
+}
+
+button:not(:disabled),
+[role="button"],
+summary {
+  cursor: pointer;
+}
+
+/*
+  Height of the phone tab bar, for anything pinned above it (sticky action
+  bars): bottom-[var(--ux-bottom-nav)]. BottomNav sets data-nav-hidden on
+  <html> while it is slid away on scroll, so pinned bars drop down with it
+  instead of leaving a gap. From md there is no tab bar.
+*/
+:root {
+  --ux-bottom-nav: calc(3.5rem + 1px + env(safe-area-inset-bottom));
+}
+html[data-nav-hidden] {
+  --ux-bottom-nav: env(safe-area-inset-bottom);
+}
+@media (min-width: 48rem) {
+  :root,
+  html[data-nav-hidden] {
+    --ux-bottom-nav: 0px;
+  }
+}
+
+/*
+  The soft gradient behind every page - glass only reads as glass when there
+  is something behind it to blur. Fixed, so scrolling content slides over it.
+*/
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40rem 30rem at 8% -5%, var(--ux-blob-1), transparent 70%),
+    radial-gradient(36rem 28rem at 100% 10%, var(--ux-blob-2), transparent 70%),
+    radial-gradient(44rem 30rem at 50% 110%, var(--ux-blob-3), transparent 70%),
+    var(--ux-canvas);
+}
+
+/* iOS zooms any focused input under 16px - keep form text at 16px on phones. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* Hide the spin buttons on the OTP boxes - they are numeric but not steppers. */
@@ -49,4 +336,32 @@ input[type="text"].otp-cell::-webkit-outer-spin-button,
 input[type="text"].otp-cell::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+/* No blur support, or the student asked for less transparency: go solid. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root,
+  .dark {
+    --ux-glass: var(--ux-surface);
+    --ux-glass-strong: var(--ux-surface);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  .dark {
+    --ux-glass: var(--ux-surface);
+    --ux-glass-strong: var(--ux-surface);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }

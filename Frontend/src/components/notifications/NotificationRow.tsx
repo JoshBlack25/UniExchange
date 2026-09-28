@@ -1,7 +1,8 @@
 /*
-  NotificationRow - one row in the /notifications list. Dense list style
-  (border separators, not individual shadowed cards) to match how many of
-  these can be on screen at once.
+  NotificationRow - one row in the /notifications list. Facebook-style: a
+  rounded row inside the day's card, the type icon in a coloured circle,
+  and unread rows tinted brand with a blue dot on the right (plus a
+  screen-reader "Unread" so the state is never colour-only).
 
   OWNER: Joshua Reid Adams (230317693)
 */
@@ -41,47 +42,37 @@ export function NotificationRow({
         type="button"
         onClick={() => onOpen(notification)}
         className={
-          "flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-gray-50 " +
-          "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 " +
-          (unread ? "bg-brand-50/40" : "bg-white")
+          "flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition active:scale-[0.99] " +
+          "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500 " +
+          (unread ? "bg-brand-50 hover:bg-brand-100" : "hover:bg-surface-muted")
         }
       >
-        <span className="relative mt-0.5 shrink-0">
-          <NotificationIcon type={notification.type} />
-          {unread && (
-            <span
-              aria-hidden="true"
-              className="absolute -left-1.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-brand-600"
-            />
-          )}
-        </span>
+        <NotificationIcon type={notification.type} />
 
         <span className="min-w-0 flex-1">
           <span
-            className={`block text-sm ${unread ? "font-semibold text-ink-900" : "font-medium text-ink-800"}`}
+            className={`block text-[0.9375rem] leading-snug text-fg ${unread ? "font-semibold" : "font-medium"}`}
           >
             {notification.title}
           </span>
           {notification.content && (
-            <span className="mt-0.5 block truncate text-sm text-ink-500">
+            <span className="mt-0.5 line-clamp-2 text-sm text-fg-muted">
               {notification.content}
             </span>
           )}
-          <span className="mt-1 block text-xs text-ink-400">
+          <span
+            className={`mt-1 block text-xs ${unread ? "font-semibold text-brand-700" : "text-fg-muted"}`}
+          >
             {timeAgo(notification.createdAt)}
           </span>
         </span>
 
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          className="mt-1.5 size-4 shrink-0 text-ink-400"
-        >
-          <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        {unread && (
+          <span className="shrink-0 px-1">
+            <span aria-hidden="true" className="block size-3 rounded-full bg-primary" />
+            <span className="sr-only">Unread</span>
+          </span>
+        )}
       </button>
     </li>
   );

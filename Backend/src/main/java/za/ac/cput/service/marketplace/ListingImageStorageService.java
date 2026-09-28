@@ -5,7 +5,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -16,15 +15,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import za.ac.cput.util.ImageTypeDetector;
+
 @Service
 public class ListingImageStorageService {
 
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024;
-    private static final Map<String, String> EXTENSIONS = Map.of(
-            "image/jpeg", ".jpg",
-            "image/png", ".png",
-            "image/gif", ".gif",
-            "image/webp", ".webp");
 
     private final Path root;
 
@@ -52,27 +48,36 @@ public class ListingImageStorageService {
         }
     }
 
+    /**
+     * Rejects an empty, oversized or non-image upload. The declared Content-Type is
+     * ignored: the bytes themselves must be a JPEG, PNG, GIF or WebP.
+     */
     public void validate(MultipartFile file) {
+        detectedType(file);
+    }
+
+    /**
+     * The upload's real MIME type, from its first bytes. Store and serve this, never
+     * file.getContentType() - that is whatever the client chose to claim.
+     */
+    public String detectedType(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Please select an image to upload");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new IllegalArgumentException("Image must be 10 MB or smaller");
         }
-
-        String contentType = file.getContentType() == null
-                ? ""
-                : file.getContentType().toLowerCase(Locale.ROOT);
-        String extension = EXTENSIONS.get(contentType);
-        if (extension == null) {
-            throw new IllegalArgumentException("Only JPEG, PNG, GIF, and WebP images are supported");
+        try {
+            return ImageTypeDetector.detect(file.getInputStream())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Only JPEG, PNG, GIF, and WebP images are supported"));
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("Could not read the uploaded image", exception);
         }
     }
 
     public String fileName(MultipartFile file) {
-        validate(file);
-        String contentType = file.getContentType().toLowerCase(Locale.ROOT);
-        String fileName = UUID.randomUUID() + EXTENSIONS.get(contentType);
+        String fileName = UUID.randomUUID() + ImageTypeDetector.extensionFor(detectedType(file));
         Path destination = root.resolve(fileName).normalize();
         if (!destination.startsWith(root)) {
             throw new IllegalArgumentException("Invalid image filename");

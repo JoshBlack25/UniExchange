@@ -115,6 +115,15 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Rate limiting (security/RateLimitFilter). In-memory token buckets; the
+             jdk17 build is the current line and runs on Java 25. Core only - no
+             distributed backend, since the app runs as a single instance. -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>8.20.0</version>
+        </dependency>
+
         <!-- Reused from your previous project: email/field format checks -->
         <dependency>
             <groupId>commons-validator</groupId>

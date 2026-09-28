@@ -1,0 +1,58 @@
+<!--
+  Source for public/og-image.png, the 1200x630 link-preview card.
+  Brand colours from src/index.css; the glyph is the one in Logo.tsx.
+  Text uses Helvetica/Arial so it renders offline. Rebuild with: npm run icons
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f3243"/>
+      <stop offset="0.55" stop-color="#135070"/>
+      <stop offset="1" stop-color="#16658a"/>
+    </linearGradient>
+    <radialGradient id="blob1" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3b9dc0" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#3b9dc0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blob2" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6fbcd8" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#6fbcd8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6fbcd8"/>
+      <stop offset="1" stop-color="#1f7fa4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1060" cy="90" r="360" fill="url(#blob1)"/>
+  <circle cx="140" cy="640" r="320" fill="url(#blob2)"/>
+
+  <!-- wordmark -->
+  <g transform="translate(88 92)">
+    <circle cx="36" cy="36" r="36" fill="url(#mark)"/>
+    <g transform="translate(36 36) scale(1.9) translate(-12 -12)">
+      <path d="M4 8h13l-3-3M20 16H7l3 3" fill="none" stroke="#ffffff" stroke-width="2.25"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="92" y="49" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="38" font-weight="700" fill="#ffffff">Uni<tspan fill="#a9d8ea">Exchange</tspan></text>
+  </g>
+
+  <!-- headline -->
+  <text font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="800" font-size="76" fill="#ffffff" letter-spacing="-1.5">
+    <tspan x="88" y="300">The verified marketplace</tspan>
+    <tspan x="88" y="386">for <tspan fill="#a9d8ea">CPUT students</tspan></tspan>
+  </text>
+
+  <text x="88" y="452" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="30" fill="#d4ecf5">Buy, sell and swap textbooks, tech and more on campus.</text>
+
+  <!-- feature pills -->
+  <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="600" fill="#ffffff">
+    <rect x="88" y="508" width="258" height="50" rx="25" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="217" y="540" text-anchor="middle">Verified CPUT emails</text>
+    <rect x="362" y="508" width="204" height="50" rx="25" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="464" y="540" text-anchor="middle">Chat to sellers</text>
+    <rect x="582" y="508" width="244" height="50" rx="25" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="704" y="540" text-anchor="middle">Wallet with escrow</text>
+  </g>
+</svg>

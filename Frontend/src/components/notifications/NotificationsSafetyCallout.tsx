@@ -8,58 +8,43 @@
   Static copy for now, same as its feed counterparts - there's no backend
   concept of "safe zones" to source real numbers from yet.
 
+  Stacked (icon + copy, then the link) so the same card works in both places
+  NotificationsPage puts it: the narrow xl right rail, and inline under the
+  list on smaller screens.
+
   OWNER: Joshua Reid Adams (230317693)
 */
 
-import { useNavigate } from "react-router-dom";
+import { ArrowRight, ShieldCheck } from "@phosphor-icons/react";
+import { Link } from "react-router-dom";
 
 import { Card } from "@/components/ui/Card";
 
 export function NotificationsSafetyCallout() {
-  const navigate = useNavigate();
-
   return (
-    <Card className="flex flex-wrap items-center justify-between gap-4 p-4">
+    <Card>
       <div className="flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            className="size-5"
-          >
-            <path
-              d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6l-8-3Z"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="m9 12 2 2 4-4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+          <ShieldCheck aria-hidden="true" weight="fill" className="size-5" />
         </span>
-        <div>
-          <p className="text-sm font-semibold text-ink-900">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-fg">
             Campus Safety Commitment
-          </p>
-          <p className="mt-0.5 text-xs text-ink-500">
+          </h2>
+          <p className="mt-0.5 text-sm text-fg-muted">
             All buyers and sellers in your notification log are verified with
             university registration emails.
           </p>
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => navigate("/bulletin")}
-        className="shrink-0 text-sm font-medium text-brand-700 hover:text-brand-900"
+      <Link
+        to="/bulletin"
+        className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-brand-500 -ml-2 sm:ml-11"
       >
-        View Safe Zones →
-      </button>
+        View Safe Zones
+        <ArrowRight aria-hidden="true" className="size-4" />
+      </Link>
     </Card>
   );
 }

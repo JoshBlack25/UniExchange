@@ -75,14 +75,41 @@ public class UniExchangeUserDetailsService implements UserDetailsService {
 
         private final User user;
         private final Collection<GrantedAuthority> authorities;
+        private final SessionMode mode;
 
         AuthenticatedUser(User user, Collection<GrantedAuthority> authorities) {
+            this(user, authorities, SessionMode.STANDARD);
+        }
+
+        AuthenticatedUser(User user, Collection<GrantedAuthority> authorities, SessionMode mode) {
             this.user = user;
             this.authorities = authorities;
+            this.mode = mode;
         }
 
         public User getUser() {
             return this.user;
+        }
+
+        /** The mode of the token this request came in on. */
+        public SessionMode getMode() {
+            return this.mode;
+        }
+
+        /**
+         * True only in a moderator or admin session. Use this, not the raw
+         * database roles, to decide whether moderator-only behaviour applies.
+         */
+        public boolean isModerating() {
+            return hasAuthority("ROLE_MODERATOR");
+        }
+
+        public boolean isAdministering() {
+            return hasAuthority("ROLE_ADMIN");
+        }
+
+        private boolean hasAuthority(String authority) {
+            return this.authorities.stream().anyMatch(a -> authority.equals(a.getAuthority()));
         }
 
         @Override
@@ -101,7 +128,7 @@ public class UniExchangeUserDetailsService implements UserDetailsService {
         }
 
         /*
-         ACTIVE only. PENDING_VERIFICATION deliberately fails here: an account
+         Everything but PENDING_VERIFICATION. That status deliberately fails here: an account
          is unusable until the emailed code has proved the student owns the
          mailbox, which is the whole point of the verification gate.
 
@@ -110,12 +137,23 @@ public class UniExchangeUserDetailsService implements UserDetailsService {
         */
         @Override
         public boolean isEnabled() {
-            return this.user.getAccountStatus() == AccountStatus.ACTIVE;
+            return this.user.getAccountStatus() != AccountStatus.PENDING_VERIFICATION;
         }
 
+        /* SUSPENDED -> LockedException -> 403 ACCOUNT_SUSPENDED at login. */
         @Override
         public boolean isAccountNonLocked() {
             return this.user.getAccountStatus() != AccountStatus.SUSPENDED;
+        }
+
+        /*
+         DEACTIVATED (closed by a moderator) -> AccountExpiredException, which the
+         generic handler reports as "Invalid email or password". Without this it
+         would pass isEnabled and sign in.
+        */
+        @Override
+        public boolean isAccountNonExpired() {
+            return this.user.getAccountStatus() != AccountStatus.DEACTIVATED;
         }
 
     }

@@ -10,24 +10,19 @@
     </Select>
 */
 
-import { forwardRef } from 'react'
-
 type SelectProps = React.ComponentProps<'select'> & {
   label: string
   error?: string
   hint?: string
 }
 
-export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { label, error, hint, id, className = '', children, ...rest },
-  ref,
-) {
+export function Select({ label, error, hint, id, className = '', children, ref, ...rest }: SelectProps) {
   const selectId = id ?? rest.name
   const describedBy = error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined
 
   return (
     <div className="space-y-1.5">
-      <label htmlFor={selectId} className="block text-sm font-medium text-ink-700">
+      <label htmlFor={selectId} className="block text-sm font-medium text-fg">
         {label}
       </label>
 
@@ -38,11 +33,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={
-          'block w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-ink-900 ' +
-          'focus:outline-2 focus:outline-offset-0 ' +
+          'block min-h-11 w-full rounded-xl border bg-surface px-3.5 py-2.5 text-sm text-fg shadow-xs transition ' +
+          'hover:border-line-strong focus:border-brand-500 focus:outline-2 focus:outline-offset-0 disabled:bg-surface-muted disabled:text-fg-subtle ' +
           (error
-            ? 'border-red-300 focus:outline-red-500 '
-            : 'border-gray-300 focus:outline-brand-600 ') +
+            ? 'border-red-300 focus:outline-red-500/40 '
+            : 'border-line-strong focus:outline-brand-500/30 ') +
           className
         }
       >
@@ -54,10 +49,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           {error}
         </p>
       ) : hint ? (
-        <p id={`${selectId}-hint`} className="text-xs text-ink-400">
+        <p id={`${selectId}-hint`} className="text-xs text-fg-subtle">
           {hint}
         </p>
       ) : null}
     </div>
   )
-})
+}

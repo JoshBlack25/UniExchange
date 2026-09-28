@@ -27,8 +27,13 @@ public class Role {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long roleId;
 
+    /*
+     varchar, not Hibernate's default native MySQL ENUM: ddl-auto=update never
+     alters an ENUM's value list, so adding MODERATOR would be rejected by an
+     existing database. SchemaPatchRunner converts tables created before this.
+    */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, columnDefinition = "varchar(20)")
     private RoleType name;
 
     @Column(length = 255)

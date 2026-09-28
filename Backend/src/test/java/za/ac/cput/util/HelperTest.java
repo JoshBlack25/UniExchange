@@ -111,6 +111,22 @@ class HelperTest {
     }
 
     @Test
+    void isStaffEmail() {
+        assertTrue(Helper.isStaffEmail("jsmith@cput.ac.za"));
+        assertTrue(Helper.isStaffEmail("jane.smith@cput.ac.za"));
+        assertTrue(Helper.isStaffEmail("JSmith@CPUT.ac.za"));
+        assertTrue(Helper.isStaffEmail("  jsmith@cput.ac.za  "));
+
+        // A student address is not a staff address, even though both are CPUT.
+        assertFalse(Helper.isStaffEmail("240453182@mycput.ac.za"));
+        assertFalse(Helper.isStaffEmail("jsmith@cput.ac.za.evil.com"));
+        assertFalse(Helper.isStaffEmail("jsmith@gmail.com"));
+        assertFalse(Helper.isStaffEmail("@cput.ac.za"));
+        assertFalse(Helper.isStaffEmail(null));
+        assertFalse(Helper.isStaffEmail(""));
+    }
+
+    @Test
     void isValidCurrency() {
         assertTrue(Helper.isValidCurrency("ZAR"));
         assertFalse(Helper.isValidCurrency("zar"));

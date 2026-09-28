@@ -51,13 +51,15 @@ public class BulletinPostServiceImpl implements IBulletinPostService {
 
     @Override
     public boolean delete(Long id) {
-        if (id == null || !this.repository.existsById(id)) {
+        BulletinPost post = id == null ? null : this.repository.findById(id).orElse(null);
+        if (post == null) {
             return false;
         }
 
         for (BulletinPostImage image : this.imageService.findByBulletinPostId(id)) {
             this.imageService.delete(image.getImageId());
-            this.storage.deleteIfManaged(image.getImageUrl());
+            // Only files the author uploaded; see LocalFileStorage.
+            this.storage.deleteIfManaged(image.getImageUrl(), post.getAuthorId());
         }
 
         this.repository.deleteById(id);

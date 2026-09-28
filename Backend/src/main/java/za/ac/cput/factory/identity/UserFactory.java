@@ -144,4 +144,87 @@ public class UserFactory {
                 .build();
     }
 
+    /**
+     * Replaces the password hash and stamps credentialsChangedAt, which makes
+     * JwtAuthenticationFilter reject every token issued before now.
+     */
+    public static User changePassword(User existing, String passwordHash) {
+        if (!Helper.isValidObject(existing)) {
+            throw new IllegalArgumentException("User: existing record is required to change the password");
+        }
+        if (Helper.isNullOrEmpty(passwordHash)) {
+            throw new IllegalArgumentException("User: passwordHash is required");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        return new User.Builder()
+                .copy(existing)
+                .setPasswordHash(passwordHash)
+                .setCredentialsChangedAt(now)
+                .setUpdatedAt(now)
+                .build();
+    }
+
+    /**
+     * Moves the account to a new status. Locking statuses (SUSPENDED,
+     * DEACTIVATED) also stamp credentialsChangedAt so existing tokens die now.
+     */
+    public static User changeStatus(User existing, AccountStatus accountStatus) {
+        if (!Helper.isValidObject(existing)) {
+            throw new IllegalArgumentException("User: existing record is required to change the status");
+        }
+        if (!Helper.isValidObject(accountStatus)) {
+            throw new IllegalArgumentException("User: accountStatus is required");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        User.Builder builder = new User.Builder()
+                .copy(existing)
+                .setAccountStatus(accountStatus)
+                .setUpdatedAt(now);
+        if (accountStatus == AccountStatus.SUSPENDED || accountStatus == AccountStatus.DEACTIVATED) {
+            builder.setCredentialsChangedAt(now);
+        }
+        return builder.build();
+    }
+
+    /** Records that the profile photo changed (now) or was removed (null). */
+    public static User changePhoto(User existing, LocalDateTime photoUpdatedAt) {
+        if (!Helper.isValidObject(existing)) {
+            throw new IllegalArgumentException("User: existing record is required to change the photo");
+        }
+        return new User.Builder()
+                .copy(existing)
+                .setPhotoUpdatedAt(photoUpdatedAt)
+                .setUpdatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    /**
+     * What a moderator's "delete user" does: the account is closed and stripped
+     * of personal details, but the row stays so wallets, purchases, reviews and
+     * chats that point at this id keep making sense.
+     */
+    public static User anonymise(User existing, String randomPasswordHash) {
+        if (!Helper.isValidObject(existing)) {
+            throw new IllegalArgumentException("User: existing record is required to anonymise");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        return new User.Builder()
+                .copy(existing)
+                .setEmail("deleted-" + existing.getUserId() + "@removed.invalid")
+                .setFirstName("Deleted")
+                .setMiddleName(null)
+                .setLastName("user")
+                .setCellPhone(null)
+                .setDateOfBirth(null)
+                .setPasswordHash(randomPasswordHash)
+                .setAccountStatus(AccountStatus.DEACTIVATED)
+                .setCredentialsChangedAt(now)
+                .setPhotoUpdatedAt(null)
+                .setUpdatedAt(now)
+                .build();
+    }
+
 }

@@ -10,11 +10,19 @@
 
 package za.ac.cput.dto.trust;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 import za.ac.cput.domain.enums.VendorApplicationStatus;
 
+/*
+ applicantId and status are still accepted so existing clients keep working, but
+ on create both are ignored: the applicant is the token holder and a new
+ application is always PENDING. See VendorApplicationController.
+*/
 public record VendorApplicationRequest(
         long applicantId,
-        String businessName,
-        String businessDescription,
+        @NotBlank @Size(max = 150) String businessName,
+        @Size(max = 2000) String businessDescription,
         VendorApplicationStatus status) {
 }

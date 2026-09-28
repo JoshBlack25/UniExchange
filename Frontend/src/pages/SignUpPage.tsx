@@ -9,9 +9,12 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 
+import { Seo } from '@/components/seo/Seo'
 import { Alert } from '@/components/ui/Alert'
+import { PasswordField } from '@/components/auth/PasswordField'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { Button } from '@/components/ui/Button'
+import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import { authApi } from '@/lib/api/auth'
 import { ApiError } from '@/lib/api/client'
@@ -86,16 +89,21 @@ export function SignUpPage() {
       footer={
         <>
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-brand-700 hover:underline">
+          <Link to="/login" className="rounded font-semibold text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500">
             Sign in
           </Link>
         </>
       }
     >
+      <Seo
+        title="Sign up"
+        description="Create a UniExchange account with your @mycput.ac.za email and start buying, selling and swapping on campus."
+        path="/signup"
+      />
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         {formError && <Alert>{formError}</Alert>}
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <TextField
             label="First name"
             autoComplete="given-name"
@@ -111,49 +119,43 @@ export function SignUpPage() {
         </div>
 
         <TextField
-          label="Student email"
+          label="CPUT email"
           type="email"
           inputMode="email"
           autoComplete="username"
           placeholder="240453182@mycput.ac.za"
-          hint="Your student number followed by @mycput.ac.za"
+          hint="Students: student number@mycput.ac.za. Staff: your @cput.ac.za address."
           error={errors.email?.message}
           {...register('email')}
         />
 
         {campuses.length > 0 && (
-          <div className="space-y-1.5">
-            <label htmlFor="campusId" className="block text-sm font-medium text-ink-700">
-              Campus <span className="font-normal text-ink-400">(optional)</span>
-            </label>
-            <select
-              id="campusId"
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-ink-900 focus:outline-2 focus:outline-brand-600"
-              defaultValue=""
-              {...register('campusId')}
-            >
-              <option value="">Select your campus</option>
-              {campuses.map((campus) => (
-                <option key={campus.campusId} value={campus.campusId}>
-                  {campus.name} — {campus.city}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            id="campusId"
+            label="Campus (optional)"
+            defaultValue=""
+            error={errors.campusId?.message}
+            {...register('campusId')}
+          >
+            <option value="">Select your campus</option>
+            {campuses.map((campus) => (
+              <option key={campus.campusId} value={campus.campusId}>
+                {campus.name} — {campus.city}
+              </option>
+            ))}
+          </Select>
         )}
 
-        <TextField
+        <PasswordField
           label="Password"
-          type="password"
           autoComplete="new-password"
           hint="At least 8 characters"
           error={errors.password?.message}
           {...register('password')}
         />
 
-        <TextField
+        <PasswordField
           label="Confirm password"
-          type="password"
           autoComplete="new-password"
           error={errors.confirmPassword?.message}
           {...register('confirmPassword')}

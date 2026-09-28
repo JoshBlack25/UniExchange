@@ -32,14 +32,23 @@ public class Helper {
      because the code is delivered to a mailbox that does not exist.
 
      Overridable at runtime via app.auth.student-email-pattern (see
-     StudentEmailValidator). Staff (@cput.ac.za) are a separate Entra tenant
-     entirely and are not accepted yet; faculty support belongs in a sibling
-     isValidStaffEmail once the product needs it.
+     StudentEmailValidator). Staff use the separate @cput.ac.za domain - see
+     STAFF_EMAIL_PATTERN below.
     */
     public static final String STUDENT_EMAIL_PATTERN = "^\\d{8,10}@mycput\\.ac\\.za$";
 
     private static final java.util.regex.Pattern STUDENT_EMAIL =
             java.util.regex.Pattern.compile(STUDENT_EMAIL_PATTERN, java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /*
+     CPUT staff addresses: any mailbox name on @cput.ac.za (smithj@, john.smith@).
+     Note "@cput" - a student's "@mycput.ac.za" never matches this, so the two
+     patterns cannot overlap. Overridable via app.auth.staff-email-pattern.
+    */
+    public static final String STAFF_EMAIL_PATTERN = "^[A-Za-z0-9._%+-]+@cput\\.ac\\.za$";
+
+    private static final java.util.regex.Pattern STAFF_EMAIL =
+            java.util.regex.Pattern.compile(STAFF_EMAIL_PATTERN, java.util.regex.Pattern.CASE_INSENSITIVE);
 
     // Prevent instantiation - utility class
     private Helper() {}
@@ -48,6 +57,12 @@ public class Helper {
     public static boolean isValidStudentEmail(String email) {
         if (isNullOrEmpty(email)) return false;
         return STUDENT_EMAIL.matcher(email.trim()).matches();
+    }
+
+    // A CPUT staff address - <name>@cput.ac.za
+    public static boolean isStaffEmail(String email) {
+        if (isNullOrEmpty(email)) return false;
+        return STAFF_EMAIL.matcher(email.trim()).matches();
     }
 
     // Check if a String is null or empty

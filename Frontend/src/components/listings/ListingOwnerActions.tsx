@@ -1,6 +1,16 @@
+/*
+  Seller-only controls on the listing page: mark as sold, and delete (with an
+  inline confirm step). Delete sits in its own "danger zone" row, separated
+  from the everyday action, and uses Button variant="danger".
+
+  Owner: Aidan Barends (230255639)
+*/
+
+import { CheckCircle, Trash } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
 import type { Listing } from '@/lib/api/types'
 
 type ListingOwnerActionsProps = {
@@ -32,47 +42,61 @@ export function ListingOwnerActions({ listing, onMarkSold, onDelete }: ListingOw
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4">
-      <p className="mb-3 text-sm font-medium text-ink-700">Manage this listing</p>
+    <Card>
+      <h2 className="text-sm font-semibold text-fg">Manage this listing</h2>
+      <p className="mt-0.5 text-sm text-fg-muted">Only you can see these controls.</p>
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        {listing.status === 'ACTIVE' && (
-          <Button
-            variant="ghost"
-            loading={pending === 'sold'}
-            disabled={pending !== null}
-            onClick={handleMarkSold}
-          >
-            Mark as sold
-          </Button>
-        )}
+      {listing.status === 'ACTIVE' && (
+        <Button
+          variant="secondary"
+          className="mt-3 sm:w-auto"
+          loading={pending === 'sold'}
+          disabled={pending !== null}
+          onClick={handleMarkSold}
+        >
+          <CheckCircle aria-hidden="true" className="size-5" />
+          Mark as sold
+        </Button>
+      )}
 
+      <div className="mt-4 border-t border-line pt-4">
         {!confirmingDelete ? (
           <Button
-            variant="ghost"
+            variant="danger"
             disabled={pending !== null}
-            className="!text-red-700 hover:!bg-red-50"
+            className="sm:w-auto"
             onClick={() => setConfirmingDelete(true)}
           >
+            <Trash aria-hidden="true" className="size-5" />
             Delete listing
           </Button>
         ) : (
-          <div className="flex flex-1 gap-2">
-            <Button
-              variant="primary"
-              loading={pending === 'delete'}
-              disabled={pending !== null}
-              className="!bg-red-600 hover:!bg-red-700 active:!bg-red-800"
-              onClick={handleDelete}
-            >
-              Confirm delete
-            </Button>
-            <Button variant="ghost" disabled={pending !== null} onClick={() => setConfirmingDelete(false)}>
-              Cancel
-            </Button>
+          <div role="group" aria-label="Confirm delete" className="rounded-xl bg-red-50 p-3">
+            <p className="text-sm font-medium text-red-800">
+              Delete this listing? This can't be undone.
+            </p>
+            <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row">
+              <Button
+                variant="secondary"
+                className="sm:w-auto"
+                disabled={pending !== null}
+                onClick={() => setConfirmingDelete(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                className="sm:w-auto"
+                loading={pending === 'delete'}
+                disabled={pending !== null}
+                onClick={handleDelete}
+              >
+                Confirm delete
+              </Button>
+            </div>
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }

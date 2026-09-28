@@ -11,6 +11,8 @@ package za.ac.cput.controller.trust;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -53,7 +55,7 @@ public class ReviewController {
      * five-star reviews of themselves.
      */
     @PostMapping
-    public ResponseEntity<Review> create(@RequestBody ReviewRequest request,
+    public ResponseEntity<Review> create(@Valid @RequestBody ReviewRequest request,
                                          @AuthenticationPrincipal AuthenticatedUser principal) {
         Review created = this.submissionService.submit(
                 principal.getUser().getUserId(),
@@ -76,7 +78,7 @@ public class ReviewController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Review> update(@PathVariable Long id, @RequestBody ReviewRequest request) {
+    public ResponseEntity<Review> update(@PathVariable Long id, @Valid @RequestBody ReviewRequest request) {
         Review existing = this.service.read(id);
         if (existing == null) {
             return ResponseEntity.notFound().build();

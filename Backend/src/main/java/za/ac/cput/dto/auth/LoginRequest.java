@@ -12,6 +12,9 @@
  rememberMe carries the checkbox through, so a trusted sign-in gets the same
  long-lived token a freshly verified one would.
 
+ mode is null for a normal sign-in. The hidden moderator/admin sign-in sends
+ MODERATOR or ADMIN, and the account must hold the matching role.
+
  Author: Mogamat Yaseen Kannemeyer 240453182
  Date: 04 September 2026
 */
@@ -24,5 +27,6 @@ public record LoginRequest(
         @NotBlank String email,
         @NotBlank String password,
         String deviceToken,
-        boolean rememberMe) {
+        boolean rememberMe,
+        String mode) {
 }

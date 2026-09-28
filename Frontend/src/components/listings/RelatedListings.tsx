@@ -1,9 +1,23 @@
+/*
+  "More like this" - other ACTIVE listings in the same category on the same
+  campus, with their primary photo.
+
+  Two layouts: `row` (default) is a swipeable card strip for the main column
+  on phones/tablets; `list` is a compact vertical list for the xl right rail.
+  Loads with skeletons in the same shape, and renders nothing when there are
+  no matches.
+
+  Owner: Aidan Barends (230255639)
+*/
+
+import { ImageSquare } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { Spinner } from '@/components/ui/Spinner'
+import { Card } from '@/components/ui/Card'
 import { listingsApi } from '@/lib/api/listings'
 import type { Listing } from '@/lib/api/types'
+import { safeUrl } from '@/lib/safeUrl'
 
 const MAX_RELATED = 6
 
@@ -13,6 +27,8 @@ type RelatedListingsProps = {
   currentListingId: number
   categoryId: number
   campusId: number
+  /** `row` = swipeable strip (main column), `list` = compact rail list. */
+  layout?: 'row' | 'list'
 }
 
 type RelatedItem = Listing & { imageUrl: string | null }
@@ -21,7 +37,12 @@ type LoadState =
   | { status: 'loading' }
   | { status: 'done'; items: RelatedItem[] }
 
-export function RelatedListings({ currentListingId, categoryId, campusId }: RelatedListingsProps) {
+export function RelatedListings({
+  currentListingId,
+  categoryId,
+  campusId,
+  layout = 'row',
+}: RelatedListingsProps) {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
 
   useEffect(() => {
@@ -63,72 +84,106 @@ export function RelatedListings({ currentListingId, categoryId, campusId }: Rela
     }
   }, [currentListingId, categoryId, campusId])
 
-  if (state.status === 'loading') {
+  if (state.status === 'done' && state.items.length === 0) return null
+
+  const loading = state.status === 'loading'
+  const items = state.status === 'done' ? state.items : []
+
+  if (layout === 'list') {
     return (
-      <section className="mt-8">
-        <h2 className="mb-3 text-sm font-medium text-ink-700">More like this</h2>
-        <div className="grid place-items-center py-8">
-          <Spinner label="Loading related listings" />
-        </div>
-      </section>
+      <Card padding="none" className="p-2">
+        <h2 className="px-2 pb-1 pt-2 text-sm font-semibold text-fg">More like this</h2>
+        <ul aria-busy={loading || undefined}>
+          {loading
+            ? Array.from({ length: 3 }, (_, index) => (
+                <li key={index} aria-hidden="true" className="flex items-center gap-3 p-2">
+                  <div className="size-14 animate-pulse rounded-xl bg-surface-muted" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 w-3/4 animate-pulse rounded-md bg-surface-muted" />
+                    <div className="h-3.5 w-1/3 animate-pulse rounded-md bg-surface-muted" />
+                  </div>
+                </li>
+              ))
+            : items.map((item) => (
+                <li key={item.listingId}>
+                  <Link
+                    to={`/listings/${item.listingId}`}
+                    className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-surface-muted active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-brand-500"
+                  >
+                    <Thumb item={item} className="size-14 shrink-0 rounded-xl" />
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-sm font-medium text-fg">{item.title}</p>
+                      <p className="mt-0.5 text-sm font-bold tabular-nums text-fg">
+                        {currencyFormatter.format(item.price)}
+                      </p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+        </ul>
+      </Card>
     )
   }
 
-  if (state.items.length === 0) return null
-
   return (
-    <section className="mt-8">
-      <h2 className="mb-3 text-sm font-medium text-ink-700">More like this</h2>
+    <section aria-busy={loading || undefined}>
+      <h2 className="mb-3 text-base font-semibold text-fg">More like this</h2>
 
-      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
-        {state.items.map((item) => (
-          <Link
-            key={item.listingId}
-            to={`/listings/${item.listingId}`}
-            className="block w-40 shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:border-brand-300 hover:shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-          >
-            <div className="aspect-square w-full bg-gray-100">
-              {item.imageUrl ? (
-                <img
-                  src={item.imageUrl}
-                  alt={item.title}
-                  className="size-full object-cover"
-                  onError={(event) => {
-                    event.currentTarget.style.display = 'none'
-                  }}
-                />
-              ) : (
-                <div className="grid size-full place-items-center text-ink-300">
-                  <PhotoIcon className="size-8" />
+      <div className="scroller-x -mx-3 flex scroll-px-3 gap-3 px-3 pb-2 sm:-mx-4 sm:scroll-px-4 sm:px-4">
+        {loading
+          ? Array.from({ length: 3 }, (_, index) => (
+              <div
+                key={index}
+                aria-hidden="true"
+                className="glass-card w-40 shrink-0 overflow-hidden rounded-2xl border"
+              >
+                <div className="aspect-square animate-pulse bg-surface-muted" />
+                <div className="space-y-2 p-3">
+                  <div className="h-3.5 w-3/4 animate-pulse rounded-md bg-surface-muted" />
+                  <div className="h-3.5 w-1/3 animate-pulse rounded-md bg-surface-muted" />
                 </div>
-              )}
-            </div>
-
-            <div className="p-3">
-              <p className="line-clamp-2 text-sm font-medium text-ink-900">{item.title}</p>
-              <p className="mt-1 text-sm font-semibold text-brand-700">
-                {currencyFormatter.format(item.price)}
-              </p>
-            </div>
-          </Link>
-        ))}
+              </div>
+            ))
+          : items.map((item) => (
+              <Card
+                key={item.listingId}
+                to={`/listings/${item.listingId}`}
+                padding="none"
+                className="w-40 shrink-0 snap-start overflow-hidden active:scale-[0.98] sm:w-44"
+              >
+                <Thumb item={item} className="aspect-square w-full" />
+                <div className="p-3">
+                  <p className="text-sm font-bold tabular-nums text-fg">
+                    {currencyFormatter.format(item.price)}
+                  </p>
+                  <p className="mt-0.5 line-clamp-2 text-sm text-fg">{item.title}</p>
+                </div>
+              </Card>
+            ))}
+        <span aria-hidden="true" className="w-1 shrink-0" />
       </div>
     </section>
   )
 }
 
-function PhotoIcon({ className }: { className?: string }) {
+function Thumb({ item, className }: { item: RelatedItem; className: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
-      <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="8.5" cy="10" r="1.5" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M5 17l5-5 3 3 3-4 3 4"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <div className={`overflow-hidden bg-linear-to-br from-brand-50 via-surface-muted to-brand-100 ${className}`}>
+      {safeUrl(item.imageUrl) ? (
+        <img
+          src={safeUrl(item.imageUrl)}
+          alt={item.title}
+          loading="lazy"
+          className="size-full object-cover"
+          onError={(event) => {
+            event.currentTarget.style.display = 'none'
+          }}
+        />
+      ) : (
+        <div className="grid size-full place-items-center text-brand-600">
+          <ImageSquare aria-hidden="true" weight="duotone" className="size-7 opacity-70" />
+        </div>
+      )}
+    </div>
   )
 }

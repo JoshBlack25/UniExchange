@@ -10,8 +10,10 @@
 
 package za.ac.cput.dto.communication;
 
+import jakarta.validation.constraints.Size;
+
 public record MessageRequest(
         long conversationId,
         long senderId,
-        String content) {
+        @Size(max = 2000, message = "Keep messages under 2000 characters") String content) {
 }

@@ -23,4 +23,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     List<AuditLog> findByTargetTypeAndTargetId(String targetType, Long targetId);
 
+    List<AuditLog> findByTargetType(String targetType);
+
+    List<AuditLog> findAllByOrderByCreatedAtDesc();
+
 }

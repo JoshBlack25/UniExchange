@@ -25,6 +25,8 @@
   Author: Mogamat Yaseen Kannemeyer 240453182
 */
 
+import type { SessionMode } from '@/lib/api/types'
+
 export const SESSION_STORAGE_KEY = 'uniexchange.session'
 
 /*
@@ -36,13 +38,15 @@ export const DEVICE_STORAGE_KEY = 'uniexchange.device'
 
 export type StoredSession = {
   token: string
-  /** Epoch milliseconds. A remembered token lasts weeks, otherwise an hour. */
+  /** Epoch milliseconds. A remembered token lasts 7 days, otherwise an hour. */
   expiresAt: number
   email: string
   roles: string[]
   userId: number
   /** Which store this came from, so a refresh writes it back to the same one. */
   remembered: boolean
+  /** Missing on sessions stored before modes existed - treat as STANDARD. */
+  mode?: SessionMode
 }
 
 /*

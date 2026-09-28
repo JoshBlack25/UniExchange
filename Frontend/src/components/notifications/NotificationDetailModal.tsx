@@ -12,16 +12,21 @@
   caller passes an already-updated `notification` in, this component
   doesn't call the API itself.
 
+  Built on the shared Sheet (variant="dialog"): a bottom sheet on phones, a
+  centred dialog from sm up, with focus trap, Esc, scrim close and scroll
+  lock handled there rather than hand-rolled here.
+
   OWNER: Joshua Reid Adams (230317693)
 */
 
-import { useEffect, useRef } from "react";
+import { ArrowRight, Clock } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 
 import { NotificationIcon } from "./NotificationIcon";
 import { NOTIFICATION_TYPE_LABEL } from "./notificationLabels";
 import { notificationRoute } from "./notificationRoute";
 import { Button } from "@/components/ui/Button";
+import { Sheet } from "@/components/ui/Sheet";
 import type { Notification } from "@/lib/api/types";
 
 type NotificationDetailModalProps = {
@@ -48,106 +53,50 @@ export function NotificationDetailModal({
   onClose,
 }: NotificationDetailModalProps) {
   const navigate = useNavigate();
-  const panelRef = useRef<HTMLDivElement>(null);
   const route = notificationRoute(notification);
 
-  // Close on Escape; focus the panel on open for keyboard/screen-reader users.
-  useEffect(() => {
-    panelRef.current?.focus();
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-20 flex items-center justify-center bg-ink-900/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="notification-modal-title"
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-lg focus:outline-none"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <NotificationIcon type={notification.type} className="size-10" />
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-400">
-              {NOTIFICATION_TYPE_LABEL[notification.type]}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg p-1 text-ink-400 transition hover:bg-gray-50 hover:text-ink-700"
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="size-5"
-            >
-              <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-
-        <h2
-          id="notification-modal-title"
-          className="mt-3 text-lg font-semibold text-ink-900"
-        >
-          {notification.title}
-        </h2>
-
-        <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-400">
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            className="size-3.5"
-          >
-            <circle cx="12" cy="12" r="9" />
-            <path
-              d="M12 7v5l3 2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          {fullTimestamp(notification.createdAt)}
-        </p>
-
-        {notification.content && (
-          <p className="mt-4 whitespace-pre-line text-sm text-ink-700">
-            {notification.content}
-          </p>
-        )}
-
-        <div className="mt-6 flex items-center justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} className="w-auto px-3">
+    <Sheet
+      open
+      onClose={onClose}
+      variant="dialog"
+      title={notification.title}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} className="sm:w-auto">
             Dismiss
           </Button>
           {route && (
             <Button
               onClick={() => navigate(route.path)}
-              className="w-auto px-3"
+              className="sm:w-auto"
+              data-autofocus
             >
-              {route.label} →
+              {route.label}
+              <ArrowRight aria-hidden="true" className="size-4" />
             </Button>
           )}
+        </>
+      }
+    >
+      <div className="flex items-center gap-3">
+        <NotificationIcon type={notification.type} className="size-11" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-fg">
+            {NOTIFICATION_TYPE_LABEL[notification.type]}
+          </p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-muted">
+            <Clock aria-hidden="true" className="size-3.5" />
+            {fullTimestamp(notification.createdAt)}
+          </p>
         </div>
       </div>
-    </div>
+
+      {notification.content && (
+        <p className="mt-4 whitespace-pre-line rounded-2xl bg-surface-muted p-4 text-[0.9375rem] leading-relaxed text-fg">
+          {notification.content}
+        </p>
+      )}
+    </Sheet>
   );
 }

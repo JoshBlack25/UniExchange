@@ -101,7 +101,9 @@ public class AuditLog {
     public static class Builder{
 
         //  Variables/Attributes
-        private long auditLogId;
+        // Long, not long: a primitive defaulted to 0, so a new entry reached
+        // save() with id 0 and Hibernate tried to UPDATE a row that never existed.
+        private Long auditLogId;
         private Long adminId;
         private String action;
         private String targetType;

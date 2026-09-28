@@ -1,16 +1,26 @@
+/*
+  The bulletin post form - used both for a new post (BulletinPage, behind the
+  collapsed "What's on your mind?" card) and for editing one in place
+  (PostCard). It renders a bare <form>; the caller supplies the card around it.
+
+  Photo: one optional image, either uploaded through UploadController or
+  pasted as a URL - both end up in the same imageUrl field.
+*/
+
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ImageSquare, LinkSimple, UploadSimple } from '@phosphor-icons/react'
 import { useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 
 import { ALL_CATEGORIES, CATEGORY_LABELS } from '@/components/bulletin/categoryLabels'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
 import { Select } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import { Textarea } from '@/components/ui/Textarea'
 import { ApiError } from '@/lib/api/client'
 import { uploadsApi } from '@/lib/api/uploads'
+import { safeUrl } from '@/lib/safeUrl'
 import type { BulletinPostValues } from '@/lib/schemas'
 import { bulletinPostSchema } from '@/lib/schemas'
 
@@ -21,6 +31,10 @@ type PostComposerProps = {
   initialValues?: BulletinPostValues
   submitLabel?: string
   onCancel?: () => void
+  /** Focus the title as soon as the form mounts - e.g. after "What's on your mind?" is tapped. */
+  autoFocus?: boolean
+  /** Open with the photo picker already showing (the composer card's Photo shortcut). */
+  startWithPhoto?: boolean
 }
 
 export function PostComposer({
@@ -28,6 +42,8 @@ export function PostComposer({
   initialValues,
   submitLabel = 'Post',
   onCancel,
+  autoFocus = false,
+  startWithPhoto = false,
 }: PostComposerProps) {
   const {
     register,
@@ -35,18 +51,19 @@ export function PostComposer({
     reset,
     setError,
     setValue,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<BulletinPostValues>({
     resolver: zodResolver(bulletinPostSchema),
     defaultValues: initialValues ?? { category: 'GENERAL' },
   })
-  const [showPhotoInput, setShowPhotoInput] = useState(Boolean(initialValues?.imageUrl))
+  const [showPhotoInput, setShowPhotoInput] = useState(startWithPhoto || Boolean(initialValues?.imageUrl))
   const [photoMode, setPhotoMode] = useState<'upload' | 'url'>(initialValues?.imageUrl ? 'url' : 'upload')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const imageUrl = watch('imageUrl')
+  const imageUrl = useWatch({ control, name: 'imageUrl' })
+  const previewUrl = safeUrl(imageUrl)
 
   const submit = handleSubmit(async (values) => {
     try {
@@ -79,160 +96,136 @@ export function PostComposer({
   }
 
   return (
-    <Card>
-      <form onSubmit={submit} noValidate className="space-y-3">
-        {errors.root && <Alert>{errors.root.message}</Alert>}
+    <form onSubmit={submit} noValidate className="space-y-4">
+      {errors.root && <Alert>{errors.root.message}</Alert>}
 
-        <TextField
-          label="Title"
-          placeholder="What's this about?"
-          error={errors.title?.message}
-          {...register('title')}
-        />
-
-        <Select label="Category" error={errors.category?.message} {...register('category')}>
-          {ALL_CATEGORIES.map((category) => (
-            <option key={category} value={category}>
-              {CATEGORY_LABELS[category]}
-            </option>
-          ))}
-        </Select>
-
-        <Textarea
-          label="What's happening on campus?"
-          placeholder="Share an announcement, event, or notice..."
-          rows={3}
-          error={errors.content?.message}
-          {...register('content')}
-        />
-
-        {showPhotoInput && (
-          <div className="space-y-2 rounded-lg border border-gray-200 p-3">
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => setPhotoMode('upload')}
-                aria-pressed={photoMode === 'upload'}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                  photoMode === 'upload' ? 'bg-brand-50 text-brand-700' : 'text-ink-500 hover:bg-gray-100'
-                }`}
-              >
-                Upload a photo
-              </button>
-              <button
-                type="button"
-                onClick={() => setPhotoMode('url')}
-                aria-pressed={photoMode === 'url'}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                  photoMode === 'url' ? 'bg-brand-50 text-brand-700' : 'text-ink-500 hover:bg-gray-100'
-                }`}
-              >
-                Paste a link
-              </button>
-            </div>
-
-            {photoMode === 'upload' ? (
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={ACCEPTED_IMAGE_TYPES}
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="!w-auto"
-                  loading={uploading}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {imageUrl ? 'Choose a different photo' : 'Choose a photo'}
-                </Button>
-                {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
-              </div>
-            ) : (
-              <TextField
-                label="Image URL"
-                placeholder="https://..."
-                error={errors.imageUrl?.message}
-                {...register('imageUrl')}
-              />
-            )}
-
-            {imageUrl && (
-              <img src={imageUrl} alt="" className="h-24 rounded-md border border-gray-200 object-cover" />
-            )}
-          </div>
-        )}
-
-        <div className="flex gap-3 text-ink-500">
-          <button
-            type="button"
-            onClick={() =>
-              setShowPhotoInput((shown) => {
-                if (shown) {
-                  setValue('imageUrl', '')
-                  setUploadError(null)
-                  setPhotoMode('upload')
-                }
-                return !shown
-              })
-            }
-            aria-pressed={showPhotoInput}
-            className="flex items-center gap-1.5 text-xs hover:text-ink-700"
-          >
-            <PhotoIcon className="size-4" />
-            {showPhotoInput ? 'Remove photo' : 'Photo'}
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Coming soon"
-            className="flex cursor-not-allowed items-center gap-1.5 text-xs text-ink-400"
-          >
-            <EventIcon className="size-4" />
-            Event
-          </button>
-        </div>
-
-        <div className="flex justify-end gap-2">
-          {onCancel && (
-            <Button type="button" variant="ghost" disabled={isSubmitting} onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-          <Button type="submit" loading={isSubmitting}>
-            {submitLabel}
-          </Button>
-        </div>
-      </form>
-    </Card>
-  )
-}
-
-function PhotoIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
-      <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="8.5" cy="10" r="1.5" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M5 17l5-5 3 3 3-4 3 4"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      <TextField
+        label="Title"
+        placeholder="What's this about?"
+        autoFocus={autoFocus}
+        error={errors.title?.message}
+        {...register('title')}
       />
-    </svg>
-  )
-}
 
-function EventIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
-      <rect x="3" y="5" width="18" height="15" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M3 9.5h18" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
+      <Textarea
+        label="What's happening on campus?"
+        placeholder="Share an announcement, event, or notice..."
+        rows={4}
+        error={errors.content?.message}
+        {...register('content')}
+      />
+
+      <Select label="Category" error={errors.category?.message} {...register('category')}>
+        {ALL_CATEGORIES.map((category) => (
+          <option key={category} value={category}>
+            {CATEGORY_LABELS[category]}
+          </option>
+        ))}
+      </Select>
+
+      {showPhotoInput && (
+        <div className="space-y-3 rounded-2xl border border-line bg-surface-muted/60 p-3">
+          {/* Segmented control: upload a file, or paste a link. */}
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-muted p-1" role="group" aria-label="Photo source">
+            {(
+              [
+                ['upload', 'Upload', UploadSimple],
+                ['url', 'Paste a link', LinkSimple],
+              ] as const
+            ).map(([mode, label, Icon]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setPhotoMode(mode)}
+                aria-pressed={photoMode === mode}
+                className={
+                  'inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition ' +
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ' +
+                  (photoMode === mode ? 'bg-surface text-fg shadow-sm' : 'text-fg-muted hover:text-fg')
+                }
+              >
+                <Icon aria-hidden="true" className="size-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {photoMode === 'upload' ? (
+            <div className="space-y-1.5">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_IMAGE_TYPES}
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                loading={uploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ImageSquare aria-hidden="true" className="size-5" />
+                {imageUrl ? 'Choose a different photo' : 'Choose a photo'}
+              </Button>
+              {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+            </div>
+          ) : (
+            <TextField
+              label="Image URL"
+              placeholder="https://..."
+              error={errors.imageUrl?.message}
+              {...register('imageUrl')}
+            />
+          )}
+
+          {previewUrl && (
+            <img
+              src={previewUrl}
+              alt="Selected photo preview"
+              className="max-h-48 w-full rounded-xl border border-line object-cover"
+            />
+          )}
+        </div>
+      )}
+
+      {/* "Add to your post" bar, as on Facebook's composer. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-line px-3 py-1.5">
+        <span className="mr-auto text-sm font-medium text-fg">Add to your post</span>
+        <button
+          type="button"
+          onClick={() =>
+            setShowPhotoInput((shown) => {
+              if (shown) {
+                setValue('imageUrl', '')
+                setUploadError(null)
+                setPhotoMode('upload')
+              }
+              return !shown
+            })
+          }
+          aria-pressed={showPhotoInput}
+          className={
+            'inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition active:scale-[0.98] ' +
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ' +
+            (showPhotoInput ? 'bg-emerald-50 text-emerald-700' : 'text-fg-muted hover:bg-surface-muted hover:text-fg')
+          }
+        >
+          <ImageSquare aria-hidden="true" weight={showPhotoInput ? 'fill' : 'regular'} className="size-5 text-emerald-600" />
+          {showPhotoInput ? 'Remove photo' : 'Photo'}
+        </button>
+      </div>
+
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        {onCancel && (
+          <Button type="button" variant="secondary" className="sm:w-auto" disabled={isSubmitting} onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" className="sm:w-auto sm:min-w-28" loading={isSubmitting}>
+          {submitLabel}
+        </Button>
+      </div>
+    </form>
   )
 }

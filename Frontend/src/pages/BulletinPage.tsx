@@ -22,38 +22,41 @@
   PUBLISHED-only filtering happens here either way.
 
   Your own components go in src/components/bulletin/.
+
+  LAYOUT (Facebook news feed): a centred ~680px column (Columns narrow) with
+  a collapsed "What's on your mind?" card that expands into PostComposer in
+  place, the category filter as a chip row (below xl), then the posts. From xl
+  the right rail holds FilterFeedSidebar (same filter state as the chips) and
+  CampusNewsSidebar.
 */
 
+import { ImageSquare, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
 
+import { useIsModerator } from '@/auth/roles'
 import { useAuth } from '@/auth/useAuth'
 import { CampusNewsSidebar } from '@/components/bulletin/CampusNewsSidebar'
+import { CategoryFilterChips } from '@/components/bulletin/CategoryFilterChips'
 import { FilterFeedSidebar } from '@/components/bulletin/FilterFeedSidebar'
 import { PostCard } from '@/components/bulletin/PostCard'
+import { PostCardSkeleton } from '@/components/bulletin/PostCardSkeleton'
 import { PostComposer } from '@/components/bulletin/PostComposer'
+import { formatRelativeTime } from '@/components/bulletin/relativeTime'
+import { Columns } from '@/components/layout/Columns'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Seo } from '@/components/seo/Seo'
 import { Alert } from '@/components/ui/Alert'
+import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Spinner } from '@/components/ui/Spinner'
+import { IconButton } from '@/components/ui/IconButton'
 import { bulletinApi } from '@/lib/api/bulletin'
 import { ApiError } from '@/lib/api/client'
-import type { BulletinPost, BulletinPostCategory, BulletinPostImage, User } from '@/lib/api/types'
+import { moderationApi } from '@/lib/api/moderation'
+import type { ActionReport, BulletinPost, BulletinPostCategory, BulletinPostImage, User } from '@/lib/api/types'
 import { usersApi } from '@/lib/api/users'
 import type { BulletinPostValues } from '@/lib/schemas'
-
-const absoluteDateFormatter = new Intl.DateTimeFormat('en-ZA', { dateStyle: 'medium' })
-function formatRelativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const diffMin = Math.floor(diffMs / 60_000)
-  if (diffMin < 1) return 'Just now'
-  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`
-  const diffDay = Math.floor(diffHr / 24)
-  if (diffDay < 7) return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`
-  return absoluteDateFormatter.format(new Date(iso))
-}
 
 function sortPosts(posts: BulletinPost[]): BulletinPost[] {
   return [...posts].sort((a, b) => {
@@ -71,11 +74,14 @@ type LoadState =
 
 export function BulletinPage() {
   const { user } = useAuth()
+  const isModerator = useIsModerator()
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [authors, setAuthors] = useState<Map<number, User>>(new Map())
   const [postImages, setPostImages] = useState<Map<number, BulletinPostImage>>(new Map())
   const [actionError, setActionError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<BulletinPostCategory | null>(null)
+  /* The composer card starts collapsed; 'photo' opens it with the photo picker showing. */
+  const [composer, setComposer] = useState<'closed' | 'open' | 'photo'>('closed')
 
   const load = useCallback(async (category: BulletinPostCategory | null) => {
     setState({ status: 'loading' })
@@ -230,75 +236,159 @@ export function BulletinPage() {
     }
   }
 
+  /* A moderator taking down someone else's post. Errors surface in the reason dialog. */
+  const handleModeratePost = async (post: BulletinPost, report: ActionReport) => {
+    await moderationApi.removePost(post.bulletinPostId, report)
+    setState((previous) =>
+      previous.status === 'ready'
+        ? { status: 'ready', posts: previous.posts.filter((p) => p.bulletinPostId !== post.bulletinPostId) }
+        : previous,
+    )
+  }
+
+  const firstName = user?.firstName ?? null
+  const myName = user ? `${user.firstName} ${user.lastName}` : null
+
   return (
-    <>
-      <PageHeader title="Campus bulletin" subtitle="Announcements and notices" />
-
-      <div className="grid gap-6 lg:grid-cols-4">
-        <div className="hidden lg:block lg:col-span-1">
+    <Columns
+      narrow
+      asideLabel="Bulletin filters and campus news"
+      aside={
+        <>
           <FilterFeedSidebar selected={selectedCategory} onSelect={setSelectedCategory} />
-        </div>
-
-        <div className="space-y-4 lg:col-span-2">
-          <PostComposer onSubmit={handleCreatePost} />
-
-          {actionError && <Alert>{actionError}</Alert>}
-
-          {state.status === 'loading' && (
-            <div className="grid place-items-center py-16">
-              <Spinner label="Loading bulletin" className="size-8" />
-            </div>
-          )}
-
-          {state.status === 'error' && (
-            <EmptyState
-              title="Couldn't load the bulletin"
-              description={state.message}
-              action={
-                <Button variant="ghost" onClick={() => void load(selectedCategory)}>
-                  Try again
-                </Button>
-              }
-            />
-          )}
-
-          {state.status === 'ready' && state.posts.length === 0 && (
-            <EmptyState
-              title={selectedCategory === null ? 'Nothing posted yet' : 'Nothing in this category yet'}
-              description={
-                selectedCategory === null
-                  ? 'Be the first to share something with the campus.'
-                  : 'Try a different filter, or be the first to post here.'
-              }
-            />
-          )}
-
-          {state.status === 'ready' &&
-            state.posts.map((post) => {
-              const author = authors.get(post.authorId)
-              const authorName = author ? `${author.firstName} ${author.lastName}` : null
-              const isOwner = user?.userId === post.authorId
-              const imageUrl = postImages.get(post.bulletinPostId)?.imageUrl ?? null
-
-              return (
-                <PostCard
-                  key={post.bulletinPostId}
-                  post={post}
-                  authorName={authorName}
-                  imageUrl={imageUrl}
-                  isOwner={isOwner}
-                  formatRelativeTime={formatRelativeTime}
-                  onSave={(values) => handleUpdatePost(post, values)}
-                  onDelete={() => handleDeletePost(post)}
-                />
-              )
-            })}
-        </div>
-
-        <div className="lg:col-span-1">
           <CampusNewsSidebar />
-        </div>
+        </>
+      }
+    >
+      <Seo
+        title="Campus bulletin"
+        description="Events, study groups, lost and found and notices from around your CPUT campus."
+        path="/bulletin"
+        noindex
+      />
+      <PageHeader title="Campus bulletin" subtitle="Announcements, events and notices from campus" />
+
+      <div className="space-y-4">
+        {/* Composer: collapsed to a Facebook-style prompt until tapped. */}
+        <Card padding="none">
+          <section aria-labelledby="composer-heading">
+            {composer === 'closed' ? (
+              <div className="flex items-center gap-2 p-3 sm:gap-3 sm:p-4">
+                <h2 id="composer-heading" className="sr-only">
+                  Create a post
+                </h2>
+                <Avatar name={myName} className="size-10" />
+                <button
+                  type="button"
+                  onClick={() => setComposer('open')}
+                  className={
+                    'min-h-11 min-w-0 flex-1 truncate rounded-full bg-surface-muted px-3.5 text-left text-sm text-fg-muted sm:text-[0.9375rem] ' +
+                    'transition hover:bg-gray-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500'
+                  }
+                >
+                  {firstName ? `What's on your mind, ${firstName}?` : "What's on your mind?"}
+                </button>
+                <IconButton label="Add a photo" tone="plain" onClick={() => setComposer('photo')}>
+                  <ImageSquare weight="fill" aria-hidden="true" className="size-6 text-emerald-600" />
+                </IconButton>
+              </div>
+            ) : (
+              <div className="animate-fade-in">
+                <div className="flex items-center gap-3 border-b border-line px-4 py-2.5">
+                  <h2 id="composer-heading" className="flex-1 text-base font-semibold text-fg">
+                    Create post
+                  </h2>
+                  <IconButton label="Close composer" size="sm" onClick={() => setComposer('closed')}>
+                    <X aria-hidden="true" className="size-5" />
+                  </IconButton>
+                </div>
+                <div className="p-4">
+                  <div className="mb-4 flex items-center gap-3">
+                    <Avatar name={myName} className="size-10" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-fg">{myName ?? 'You'}</p>
+                      <p className="text-xs text-fg-muted">Posting to the campus bulletin</p>
+                    </div>
+                  </div>
+                  <PostComposer
+                    autoFocus
+                    startWithPhoto={composer === 'photo'}
+                    onCancel={() => setComposer('closed')}
+                    onSubmit={async (values) => {
+                      await handleCreatePost(values)
+                      setComposer('closed')
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+        </Card>
+
+        <CategoryFilterChips selected={selectedCategory} onSelect={setSelectedCategory} className="xl:hidden" />
+
+        {actionError && <Alert>{actionError}</Alert>}
+
+        {state.status === 'loading' && (
+          <div role="status" aria-label="Loading bulletin" className="space-y-4">
+            <PostCardSkeleton />
+            <PostCardSkeleton withImage />
+          </div>
+        )}
+
+        {state.status === 'error' && (
+          <EmptyState
+            title="Couldn't load the bulletin"
+            description={state.message}
+            action={
+              <Button variant="secondary" className="w-auto" onClick={() => void load(selectedCategory)}>
+                Try again
+              </Button>
+            }
+          />
+        )}
+
+        {state.status === 'ready' && state.posts.length === 0 && (
+          <EmptyState
+            title={selectedCategory === null ? 'Nothing posted yet' : 'Nothing in this category yet'}
+            description={
+              selectedCategory === null
+                ? 'Be the first to share something with the campus.'
+                : 'Try a different filter, or be the first to post here.'
+            }
+            action={
+              selectedCategory !== null ? (
+                <Button variant="secondary" className="w-auto" onClick={() => setSelectedCategory(null)}>
+                  Show all posts
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
+
+        {state.status === 'ready' &&
+          state.posts.map((post) => {
+            const author = authors.get(post.authorId)
+            const authorName = author ? `${author.firstName} ${author.lastName}` : null
+            const isOwner = user?.userId === post.authorId
+            const imageUrl = postImages.get(post.bulletinPostId)?.imageUrl ?? null
+
+            return (
+              <PostCard
+                key={post.bulletinPostId}
+                post={post}
+                authorName={authorName}
+                imageUrl={imageUrl}
+                isOwner={isOwner}
+                formatRelativeTime={formatRelativeTime}
+                onSave={(values) => handleUpdatePost(post, values)}
+                onDelete={() => handleDeletePost(post)}
+                canModerate={isModerator}
+                onModerate={(report) => handleModeratePost(post, report)}
+              />
+            )
+          })}
       </div>
-    </>
+    </Columns>
   )
 }

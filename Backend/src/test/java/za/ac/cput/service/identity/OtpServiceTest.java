@@ -17,6 +17,7 @@ package za.ac.cput.service.identity;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
@@ -30,6 +31,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import za.ac.cput.domain.enums.VerificationType;
 import za.ac.cput.domain.identity.Verification;
+import za.ac.cput.exception.TooManyRequestsException;
 import za.ac.cput.factory.identity.VerificationFactory;
 import za.ac.cput.repository.identity.VerificationRepository;
 
@@ -48,7 +50,7 @@ class OtpServiceTest {
     void setUp() {
         // Strength 4 keeps BCrypt fast enough for a test that hashes repeatedly.
         this.passwordEncoder = new BCryptPasswordEncoder(4);
-        this.otpService = new OtpService(this.repository, this.passwordEncoder, 6, 10, 5, 60);
+        this.otpService = new OtpService(this.repository, this.passwordEncoder, 6, 10, 5, 60, 10);
     }
 
     @Test
@@ -158,6 +160,20 @@ class OtpServiceTest {
         long remaining = this.otpService.resendCooldownRemaining(USER_ID);
 
         assertTrue(remaining > 0 && remaining <= 60, "expected a cooldown, got " + remaining);
+    }
+
+    @Test
+    void capsTheCodesEmailedToOneAccountPerDay() {
+        OtpService capped = new OtpService(this.repository, this.passwordEncoder, 6, 10, 5, 60, 3);
+        capped.issue(USER_ID);
+        capped.issue(USER_ID);
+        capped.issue(USER_ID);
+
+        TooManyRequestsException refused =
+                assertThrows(TooManyRequestsException.class, () -> capped.issue(USER_ID));
+        assertTrue(refused.getRetryAfterSeconds() > 0);
+        // Another account is unaffected.
+        assertNotNull(capped.issue(USER_ID + 1));
     }
 
 }

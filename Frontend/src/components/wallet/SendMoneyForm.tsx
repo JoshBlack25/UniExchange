@@ -10,6 +10,7 @@
   Author: Mogamat Yaseen Kannemeyer 240453182
 */
 
+import { PaperPlaneTilt } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import { Alert } from '@/components/ui/Alert'
@@ -19,7 +20,7 @@ import { ApiError } from '@/lib/api/client'
 import { walletApi } from '@/lib/api/wallet'
 
 import { ConfirmSendModal } from './ConfirmSendModal'
-import { isValidAmount } from './money'
+import { MAX_DAILY, MAX_TRANSFER, exceedsLimit, formatZar, isValidAmount } from './money'
 
 const ERROR_MESSAGES: Record<string, string> = {
   INSUFFICIENT_FUNDS: "You don't have enough in your wallet for that.",
@@ -53,6 +54,10 @@ export function SendMoneyForm({ onSent }: SendMoneyFormProps) {
     }
     if (!isValidAmount(amount)) {
       setError('Enter an amount like 50.00.')
+      return
+    }
+    if (exceedsLimit(amount, MAX_TRANSFER)) {
+      setError(`You can send at most ${formatZar(MAX_TRANSFER)} at a time.`)
       return
     }
 
@@ -90,9 +95,9 @@ export function SendMoneyForm({ onSent }: SendMoneyFormProps) {
   }
 
   return (
-    <div className="rounded-2xl bg-white p-5 ring-1 ring-gray-200">
-      <h2 className="text-base font-semibold text-ink-900">Send money</h2>
-      <p className="mt-1 text-sm text-ink-500">
+    // No card of its own: WalletPage shows this inside its "Send" tab.
+    <div>
+      <p className="text-sm text-fg-muted">
         Moves money from your wallet straight into another student&apos;s. It arrives instantly.
       </p>
 
@@ -111,14 +116,20 @@ export function SendMoneyForm({ onSent }: SendMoneyFormProps) {
 
         <TextField
           name="amount"
+          // Both wallet forms are mounted at once (WalletPage tabs), so ids must differ.
+          id="send-amount"
           label="Amount (ZAR)"
+          hint={`Up to ${formatZar(MAX_TRANSFER)} per transfer, ${formatZar(MAX_DAILY)} a day.`}
           inputMode="decimal"
           placeholder="50.00"
           value={amount}
           onChange={(event) => setAmount(event.target.value)}
         />
 
-        <Button type="submit">Send money</Button>
+        <Button type="submit">
+          <PaperPlaneTilt aria-hidden="true" weight="bold" className="size-5" />
+          Review and send
+        </Button>
       </form>
 
       {pending && (

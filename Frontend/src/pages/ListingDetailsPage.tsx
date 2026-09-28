@@ -8,23 +8,36 @@
   top of src/lib/api/types.ts for why.
 
   Your own components go in src/components/listings/.
+
+  LAYOUT: a centred post-width column (Columns narrow) - gallery, then the
+  price/title block, description, seller card, owner controls and "More like
+  this". At xl the SellerCard and RelatedListings move to the right rail.
+  Below md a sticky action bar (Message seller / Buy) sits flush on top of
+  the BottomNav (via --ux-bottom-nav in index.css, which also follows the
+  bar when it slides away on scroll); from md the same
+  buttons sit inline in the price block.
 */
 
-import { useCallback, useEffect, useState } from 'react'
+import { ChatCircleDots, Clock, MapPin, ShieldCheck, Wallet } from '@phosphor-icons/react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { useIsModerator } from '@/auth/roles'
 import { useAuth } from '@/auth/useAuth'
+import { Columns } from '@/components/layout/Columns'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Seo } from '@/components/seo/Seo'
 import { ListingGallery } from '@/components/listings/ListingGallery'
+import { ListingModeratorActions } from '@/components/listings/ListingModeratorActions'
 import { ListingOwnerActions } from '@/components/listings/ListingOwnerActions'
 import { RelatedListings } from '@/components/listings/RelatedListings'
 import { SellerCard } from '@/components/listings/SellerCard'
+import { ReportButton } from '@/components/reports/ReportDialog'
 import { Alert } from '@/components/ui/Alert'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Spinner } from '@/components/ui/Spinner'
 import { chatApi } from '@/lib/api/chat'
 import { ApiError, authedRequest } from '@/lib/api/client'
 import { listingsApi } from '@/lib/api/listings'
@@ -58,7 +71,51 @@ function formatRelativeTime(iso: string): string {
   return absoluteDateFormatter.format(new Date(iso))
 }
 
+/*
+  True at Tailwind's xl breakpoint, where Columns shows the right rail. Used
+  so SellerCard/RelatedListings render in exactly one place (RelatedListings
+  fetches, so rendering it twice and hiding one would double the requests).
+*/
+const XL_QUERY = '(min-width: 80rem)'
+function subscribeToXl(onChange: () => void) {
+  const query = window.matchMedia(XL_QUERY)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+function useIsXl() {
+  return useSyncExternalStore(
+    subscribeToXl,
+    () => window.matchMedia(XL_QUERY).matches,
+    () => false,
+  )
+}
+
+/* Loading placeholder in the shape of the real page. */
+function ListingSkeleton() {
+  return (
+    <div aria-hidden="true" className="mx-auto max-w-2xl space-y-4">
+      <div className="h-8 w-2/3 animate-pulse rounded-lg bg-surface-muted" />
+      <div className="aspect-4/3 animate-pulse rounded-2xl bg-surface-muted" />
+      <div className="glass-card space-y-3 rounded-2xl border p-4">
+        <div className="h-8 w-1/3 animate-pulse rounded-lg bg-surface-muted" />
+        <div className="h-4 w-1/2 animate-pulse rounded-md bg-surface-muted" />
+        <div className="h-11 animate-pulse rounded-xl bg-surface-muted" />
+      </div>
+    </div>
+  )
+}
+
 type TrustedSellerBadgeResponse = { revokedAt: string | null }
+
+const FEED_CRUMB = { label: 'Feed', to: '/feed' }
+
+/** Meta description for a listing: its price, then the start of its description. */
+function describeListing(listing: Listing): string {
+  const price = currencyFormatter.format(listing.price)
+  const text = listing.description?.replace(/\s+/g, ' ').trim()
+  const summary = text ? (text.length > 140 ? `${text.slice(0, 137)}…` : text) : 'For sale on UniExchange.'
+  return `${price} · ${summary}`
+}
 
 type LoadState =
   | { status: 'loading' }
@@ -70,6 +127,7 @@ export function ListingDetailsPage() {
   const { listingId } = useParams<{ listingId: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const isModerator = useIsModerator()
 
   const numericId = listingId !== undefined && /^\d+$/.test(listingId) ? Number(listingId) : null
 
@@ -83,6 +141,9 @@ export function ListingDetailsPage() {
   const [reviewCount, setReviewCount] = useState<number | null>(null)
   const [trusted, setTrusted] = useState<boolean | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // Which buyer action is in flight, for button spinners.
+  const [pendingAction, setPendingAction] = useState<'buy' | 'message' | null>(null)
+  const isXl = useIsXl()
 
   const load = useCallback(async (id: number) => {
     setState({ status: 'loading' })
@@ -158,7 +219,13 @@ export function ListingDetailsPage() {
   if (numericId === null) {
     return (
       <>
-        <PageHeader title="Listing" />
+        <Seo title="Listing not found" description="That link does not point to a UniExchange listing." noindex />
+        <PageHeader
+          title="Listing"
+          backTo="/feed"
+          backLabel="Back to feed"
+          breadcrumbs={[FEED_CRUMB, { label: 'Listing' }]}
+        />
         <EmptyState
           title="That doesn't look like a listing"
           description={`"${listingId}" isn't a valid listing ID.`}
@@ -169,19 +236,25 @@ export function ListingDetailsPage() {
 
   if (state.status === 'loading') {
     return (
-      <>
-        <PageHeader title="Listing" />
-        <div className="grid place-items-center py-16">
-          <Spinner label="Loading listing" className="size-8" />
-        </div>
-      </>
+      <div role="status" aria-label="Loading listing">
+        <Seo title="Listing" description="Loading this listing." noindex />
+        <h1 className="sr-only">Loading listing</h1>
+        <ListingSkeleton />
+      </div>
     )
   }
 
   if (state.status === 'not-found') {
     return (
       <>
-        <PageHeader title="Listing" subtitle={`Listing #${numericId}`} />
+        <Seo title="Listing not found" description="This listing may have been removed or the link is out of date." noindex />
+        <PageHeader
+          title="Listing"
+          subtitle={`Listing #${numericId}`}
+          backTo="/feed"
+          backLabel="Back to feed"
+          breadcrumbs={[FEED_CRUMB, { label: 'Listing not found' }]}
+        />
         <EmptyState
           title="Listing not found"
           description="This listing may have been removed or the link is out of date."
@@ -193,12 +266,19 @@ export function ListingDetailsPage() {
   if (state.status === 'error') {
     return (
       <>
-        <PageHeader title="Listing" subtitle={`Listing #${numericId}`} />
+        <Seo title="Listing" description="This listing could not be loaded." noindex />
+        <PageHeader
+          title="Listing"
+          subtitle={`Listing #${numericId}`}
+          backTo="/feed"
+          backLabel="Back to feed"
+          breadcrumbs={[FEED_CRUMB, { label: `Listing #${numericId}` }]}
+        />
         <EmptyState
           title="Couldn't load this listing"
           description={state.message}
           action={
-            <Button variant="ghost" onClick={() => void load(numericId)}>
+            <Button variant="secondary" className="w-auto" onClick={() => void load(numericId)}>
               Try again
             </Button>
           }
@@ -245,6 +325,7 @@ export function ListingDetailsPage() {
    splitting the discussion across two threads.
   */
   const handleMessageSeller = async () => {
+    setPendingAction('message')
     try {
       const thread = await chatApi.startThread({
         otherUserId: listing.sellerId,
@@ -255,6 +336,8 @@ export function ListingDetailsPage() {
       setActionError(
         error instanceof ApiError ? error.message : 'Could not open a conversation with the seller.',
       )
+    } finally {
+      setPendingAction(null)
     }
   }
 
@@ -265,6 +348,7 @@ export function ListingDetailsPage() {
   */
   const handleBuy = async () => {
     setActionError(null)
+    setPendingAction('buy')
     try {
       await purchasesApi.buy(listing.listingId, listing.price)
       navigate('/purchases')
@@ -274,6 +358,8 @@ export function ListingDetailsPage() {
         return
       }
       setActionError(error instanceof ApiError ? error.message : 'Could not complete that purchase.')
+    } finally {
+      setPendingAction(null)
     }
   }
 
@@ -291,113 +377,182 @@ export function ListingDetailsPage() {
     return 'copied'
   }
 
-  return (
+  // Buyer actions: shown to anyone who isn't the seller; Buy only while on sale.
+  const showBuyerActions = !isOwner
+  const canBuy = !isOwner && listing.status === 'ACTIVE'
+
+  const buyerButtons = (
     <>
+      <Button
+        variant={canBuy ? 'secondary' : 'primary'}
+        className={canBuy ? 'flex-1 md:w-auto md:flex-none' : 'flex-1'}
+        loading={pendingAction === 'message'}
+        disabled={pendingAction !== null}
+        onClick={handleMessageSeller}
+      >
+        <ChatCircleDots aria-hidden="true" weight="fill" className="size-5" />
+        <span className="whitespace-nowrap">
+          Message<span className="hidden min-[400px]:inline"> seller</span>
+        </span>
+      </Button>
+      {canBuy && (
+        <Button
+          className="flex-[1.4]"
+          loading={pendingAction === 'buy'}
+          disabled={pendingAction !== null}
+          onClick={handleBuy}
+        >
+          <Wallet aria-hidden="true" weight="fill" className="size-5" />
+          <span className="whitespace-nowrap tabular-nums">Buy {currencyFormatter.format(listing.price)}</span>
+        </Button>
+      )}
+    </>
+  )
+
+  const sellerCard = (
+    <SellerCard
+      seller={seller}
+      loading={sellerLoading}
+      rating={rating}
+      reviewCount={reviewCount}
+      trusted={trusted}
+      showMessageAction={false}
+      onMessage={handleMessageSeller}
+      onShare={handleShare}
+    />
+  )
+
+  const related = (layout: 'row' | 'list') => (
+    <RelatedListings
+      currentListingId={listing.listingId}
+      categoryId={listing.categoryId}
+      campusId={listing.campusId}
+      layout={layout}
+    />
+  )
+
+  return (
+    <Columns
+      narrow
+      asideLabel="Seller and similar listings"
+      aside={
+        isXl ? (
+          <>
+            {sellerCard}
+            {related('list')}
+          </>
+        ) : undefined
+      }
+    >
+      <Seo title={listing.title} description={describeListing(listing)} noindex />
       <PageHeader
         title={listing.title}
         subtitle={category ? category.name : `Listing #${listing.listingId}`}
-        action={
-          <Button variant="ghost" onClick={() => navigate('/feed')}>
-            Back to feed
-          </Button>
-        }
+        backTo="/feed"
+        backLabel="Back to feed"
+        breadcrumbs={[
+          FEED_CRUMB,
+          ...(category ? [{ label: category.name, to: `/feed?category=${category.categoryId}` }] : []),
+          { label: listing.title },
+        ]}
       />
 
       {actionError && (
-        <div className="mb-4">
+        <div className={`mb-4 ${showBuyerActions ? 'hidden md:block' : ''}`}>
           <Alert>{actionError}</Alert>
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-5">
-        <div className="md:col-span-3">
-          <ListingGallery images={images} title={listing.title} />
-        </div>
+      <div className="space-y-4">
+        <ListingGallery images={images} title={listing.title} />
 
-        <div className="flex flex-col gap-4 md:col-span-2">
-          <Card>
-            <div className="flex flex-wrap items-center gap-2">
-              {category && <Badge tone="brand">{category.name}</Badge>}
-              <Badge tone={STATUS_TONE[listing.status]}>{listing.status}</Badge>
-            </div>
+        <Card>
+          <div className="flex flex-wrap items-center gap-2">
+            {category && <Badge tone="brand">{category.name}</Badge>}
+            <Badge tone={STATUS_TONE[listing.status]}>{listing.status}</Badge>
+          </div>
 
-            <p className="mt-3 text-2xl font-semibold text-brand-700">
-              {currencyFormatter.format(listing.price)}
-            </p>
-            <p className="mt-1 text-xs text-ink-500">
+          <p
+            className={`mt-3 text-3xl font-bold tracking-tight tabular-nums ${
+              listing.status === 'ACTIVE' ? 'text-fg' : 'text-fg-muted line-through'
+            }`}
+          >
+            {currencyFormatter.format(listing.price)}
+          </p>
+
+          <ul className="mt-3 space-y-1.5 text-sm text-fg-muted">
+            <li className="flex items-center gap-2">
+              <Clock aria-hidden="true" className="size-4 shrink-0" />
               Listed {formatRelativeTime(listing.createdAt)}
+            </li>
+            {campus && (
+              <li className="flex items-center gap-2">
+                <MapPin aria-hidden="true" className="size-4 shrink-0" />
+                <span>
+                  <span className="font-medium text-fg">{campus.name}</span>
+                  {campus.city && <> · {campus.city}</>}
+                </span>
+              </li>
+            )}
+          </ul>
+
+          {/* md and up: actions inline. Phones use the sticky bar below. */}
+          {showBuyerActions && <div className="mt-4 hidden gap-2 md:flex">{buyerButtons}</div>}
+
+          {canBuy && (
+            <p className="mt-4 flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-xs text-emerald-800">
+              <ShieldCheck aria-hidden="true" weight="fill" className="size-4 shrink-0" />
+              Your money is held until you confirm the item arrived, then released to the seller.
             </p>
-          </Card>
+          )}
+        </Card>
 
-          <SellerCard
-            seller={seller}
-            loading={sellerLoading}
-            rating={rating}
-            reviewCount={reviewCount}
-            trusted={trusted}
-            showMessageAction={!isOwner}
-            onMessage={handleMessageSeller}
-            onShare={handleShare}
+        <Card>
+          <h2 className="mb-2 text-sm font-semibold text-fg">Description</h2>
+          {listing.description ? (
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-fg">{listing.description}</p>
+          ) : (
+            <p className="text-sm text-fg-muted italic">No description provided.</p>
+          )}
+        </Card>
+
+        {!isXl && sellerCard}
+
+        {isOwner && (
+          <ListingOwnerActions listing={listing} onMarkSold={handleMarkSold} onDelete={handleDelete} />
+        )}
+
+        {isModerator && !isOwner && (
+          <ListingModeratorActions
+            listing={listing}
+            onChanged={(updated) => setState({ status: 'ready', listing: updated })}
           />
+        )}
 
-          {/* Only for an item still on sale that is not your own. */}
-          {!isOwner && listing.status === 'ACTIVE' && (
-            <Card>
-              <Button onClick={handleBuy}>Buy with wallet</Button>
-              <p className="mt-2 text-xs text-ink-500">
-                Your money is held until you confirm the item arrived, then released to the
-                seller.
-              </p>
-            </Card>
-          )}
+        {user && !isOwner && listing.status !== 'REMOVED' && (
+          <div className="flex justify-end">
+            <ReportButton targetType="LISTING" targetId={listing.listingId} targetName={listing.title} />
+          </div>
+        )}
 
-          {isOwner && (
-            <ListingOwnerActions listing={listing} onMarkSold={handleMarkSold} onDelete={handleDelete} />
-          )}
-        </div>
+        {!isXl && <div className="pt-2">{related('row')}</div>}
       </div>
 
-      <Card className="mt-6">
-        <p className="mb-2 text-sm font-medium text-ink-700">Description</p>
-        {listing.description ? (
-          <p className="whitespace-pre-wrap text-sm text-ink-700">{listing.description}</p>
-        ) : (
-          <p className="text-sm text-ink-400 italic">No description provided.</p>
-        )}
-      </Card>
+      {showBuyerActions && (
+        <>
+          {/* Spacer so the last content can scroll clear of the action bar. */}
+          <div aria-hidden="true" className="h-20 md:hidden" />
 
-      {campus && (
-        <Card className="mt-6">
-          <p className="mb-2 text-sm font-medium text-ink-700">Location</p>
-          <div className="flex items-start gap-2 text-sm text-ink-700">
-            <LocationIcon className="mt-0.5 size-4 shrink-0 text-ink-400" />
-            <div>
-              <p>{campus.name}</p>
-              <p className="text-ink-500">{campus.city}</p>
-            </div>
+          <div className="glass-strong fixed inset-x-0 bottom-(--ux-bottom-nav) transition-[bottom] duration-300 z-20 border-t px-3 py-2.5 shadow-float md:hidden">
+            {actionError && (
+              <div className="mb-2">
+                <Alert>{actionError}</Alert>
+              </div>
+            )}
+            <div className="mx-auto flex max-w-lg gap-2">{buyerButtons}</div>
           </div>
-        </Card>
+        </>
       )}
-
-      <RelatedListings
-        currentListingId={listing.listingId}
-        categoryId={listing.categoryId}
-        campusId={listing.campusId}
-      />
-    </>
-  )
-}
-
-function LocationIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
-      <path
-        d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="9.5" r="2.25" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
+    </Columns>
   )
 }

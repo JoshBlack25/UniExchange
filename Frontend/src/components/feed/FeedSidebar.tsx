@@ -1,21 +1,25 @@
 /*
-  FeedSidebar - the desktop left rail from the T2 desktop mockup: a Sell Item
-  button, the Categories list with counts ("All Categories 342"), a Condition
-  Filter card, and a trust callout - matching the mockup's stacked rail.
+  FeedSidebar - the category + condition filter controls from the T2 desktop
+  mockup's left rail: the Categories list with counts ("All Categories 342")
+  and the Condition filter.
+
+  It used to be its own sticky left column, but the app now has a global
+  LeftSidebar, so three rails was one too many. FeedPage now renders this
+  inside the "Filters" Sheet (bottom sheet on phones, right panel on
+  desktop). The Sell button moved to the feed's "What are you selling?"
+  composer strip and the TrustCallout moved to the right rail.
 
   Counts are ACTIVE listings per category, computed once in FeedPage from a
-  single GET /api/listings call. Hidden below `lg` - mobile uses CategoryChips.
+  single GET /api/listings call.
 
   Owner: Joshua Reid Adams (230317693)
 */
 
-import { useNavigate } from "react-router-dom";
+import { Check, SquaresFour } from "@phosphor-icons/react";
 
 import { CategoryIcon } from "./CategoryIcon";
 import { ConditionFilter } from "./ConditionFilter";
-import { TrustCallout } from "./TrustCallout";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import type { ConditionValue } from "./conditionOptions";
 import type { Category } from "@/lib/api/types";
 
 type FeedSidebarProps = {
@@ -27,7 +31,15 @@ type FeedSidebarProps = {
   /** null means "All Categories". */
   activeCategoryId: number | null;
   onSelectCategory: (categoryId: number | null) => void;
+  condition?: ConditionValue;
+  onConditionChange?: (value: ConditionValue) => void;
 };
+
+const ROW =
+  "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm transition duration-150 active:scale-[0.99] " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500";
+const ROW_ACTIVE = "bg-brand-50 font-semibold text-brand-800";
+const ROW_IDLE = "text-fg hover:bg-surface-muted";
 
 export function FeedSidebar({
   categories,
@@ -35,81 +47,74 @@ export function FeedSidebar({
   totalActive,
   activeCategoryId,
   onSelectCategory,
+  condition,
+  onConditionChange,
 }: FeedSidebarProps) {
-  const navigate = useNavigate();
-
-  const row =
-    "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-sm transition " +
-    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600";
-  const rowActive = "bg-brand-50 font-semibold text-brand-800";
-  const rowIdle = "text-ink-700 hover:bg-gray-50";
+  const rows: { id: number | null; name: string; count: number }[] = [
+    { id: null, name: "All categories", count: totalActive },
+    ...categories.map((category) => ({
+      id: category.categoryId,
+      name: category.name,
+      count: counts[category.categoryId] ?? 0,
+    })),
+  ];
 
   return (
-    <aside className="hidden w-60 shrink-0 lg:block">
-      <div className="sticky top-24 space-y-4">
-        <Button onClick={() => navigate("/listings/new")}>+ Sell Item</Button>
-
-        <Card className="p-2">
-          <p className="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
-            Categories
-          </p>
-          <ul className="space-y-0.5">
-            <li>
-              <button
-                type="button"
-                onClick={() => onSelectCategory(null)}
-                aria-pressed={activeCategoryId === null}
-                className={`${row} ${activeCategoryId === null ? rowActive : rowIdle}`}
-              >
-                <span className="flex items-center gap-2">
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    className="size-4"
-                  >
-                    <rect x="3" y="3" width="7" height="7" rx="1" />
-                    <rect x="14" y="3" width="7" height="7" rx="1" />
-                    <rect x="3" y="14" width="7" height="7" rx="1" />
-                    <rect x="14" y="14" width="7" height="7" rx="1" />
-                  </svg>
-                  All Categories
-                </span>
-                <span className="text-xs text-ink-400">{totalActive}</span>
-              </button>
-            </li>
-
-            {categories.map((category) => (
-              <li key={category.categoryId}>
+    <div className="space-y-6">
+      <section aria-labelledby="feed-filter-categories">
+        <h3
+          id="feed-filter-categories"
+          className="text-sm font-semibold text-fg"
+        >
+          Category
+        </h3>
+        <ul className="mt-2 space-y-1">
+          {rows.map((row) => {
+            const active = activeCategoryId === row.id;
+            return (
+              <li key={row.id ?? "all"}>
                 <button
                   type="button"
-                  onClick={() => onSelectCategory(category.categoryId)}
-                  aria-pressed={activeCategoryId === category.categoryId}
-                  className={`${row} ${activeCategoryId === category.categoryId ? rowActive : rowIdle}`}
+                  onClick={() => onSelectCategory(row.id)}
+                  aria-pressed={active}
+                  className={`${ROW} ${active ? ROW_ACTIVE : ROW_IDLE}`}
                 >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <CategoryIcon
-                      name={category.name}
-                      className="size-4 shrink-0"
+                  <span
+                    className={`grid size-8 shrink-0 place-items-center rounded-full ${
+                      active
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-muted text-fg-muted"
+                    }`}
+                  >
+                    {row.id === null ? (
+                      <SquaresFour aria-hidden="true" className="size-4" />
+                    ) : (
+                      <CategoryIcon name={row.name} className="size-4" />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{row.name}</span>
+                  <span
+                    className={`text-xs tabular-nums ${active ? "text-brand-800" : "text-fg-muted"}`}
+                  >
+                    {row.count}
+                  </span>
+                  {active && (
+                    <Check
+                      aria-hidden="true"
+                      weight="bold"
+                      className="size-4 text-brand-700"
                     />
-                    <span className="truncate">{category.name}</span>
-                  </span>
-                  <span className="text-xs text-ink-400">
-                    {counts[category.categoryId] ?? 0}
-                  </span>
+                  )}
                 </button>
               </li>
-            ))}
-          </ul>
-        </Card>
+            );
+          })}
+        </ul>
+      </section>
 
-        <ConditionFilter />
-
-        <TrustCallout />
+      <div className="border-t border-line pt-5">
+        <ConditionFilter value={condition} onChange={onConditionChange} />
       </div>
-    </aside>
+    </div>
   );
 }

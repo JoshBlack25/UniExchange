@@ -3,9 +3,15 @@
   OWNER: Mogamat Wazeer Gilbert (221374698)
   ROUTE: /listings/new
 
+  LAYOUT: one centred column (max-w-2xl), the form split into grouped glass
+  cards - Details, Price & category, Photo. The Cancel / Post buttons sit in
+  a bar that sticks to the bottom of the screen on phones (above the
+  BottomNav) while the form is in view, and is a normal row from md.
+
 */
 
-import React, {useState, useEffect} from 'react'
+import {Camera, ImageSquare, X} from '@phosphor-icons/react'
+import React, {useState, useEffect, useMemo} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {useForm} from 'react-hook-form'
 import {zodResolver} from "@hookform/resolvers/zod";
@@ -16,6 +22,7 @@ import type {Campus, Category} from "@/lib/api/types";
 import {createListingSchema} from '@/lib/schemas';
 import type { CreateListingFormData } from '@/lib/schemas';
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Seo } from '@/components/seo/Seo'
 import {Card} from  '@/components/ui/Card';
 import {TextField} from '@/components/ui/TextField';
 import {Textarea} from "@/components/ui/Textarea";
@@ -33,6 +40,12 @@ export const CreateListingPage: React.FC = () => {
     const [isLoadingCampuses, setIsLoadingCampuses] = useState(true);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [rootError, setRootError] = useState<string | null>(null);
+
+    // Local preview of the chosen photo; the object URL is freed on change/unmount.
+    const previewUrl = useMemo(() => (imageFile ? URL.createObjectURL(imageFile) : null), [imageFile]);
+    useEffect(() => () => {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+    }, [previewUrl]);
 
     const {
         register,
@@ -164,25 +177,69 @@ export const CreateListingPage: React.FC = () => {
         }
     };
 
+    const sectionTitle = 'text-base font-semibold text-fg';
+    const sectionHint = 'mt-0.5 text-sm text-fg-muted';
+
     return (
-        <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+        <div className="mx-auto max-w-2xl">
+            <Seo
+                title="Create a listing"
+                description="List textbooks, tech, stationery or res items for sale to verified CPUT students on your campus."
+                path="/listings/new"
+                noindex
+            />
             <PageHeader
-                title="Create a Listing"
-                subtitle="Sell textbooks, stationary, gear, or res items directly to peers on your campus."
+                title="Create a listing"
+                subtitle="Sell textbooks, stationery, gear, or res items directly to peers on your campus."
+                backTo="/feed"
+                backLabel="Back to feed"
+                breadcrumbs={[{label: 'Feed', to: '/feed'}, {label: 'New listing'}]}
             />
 
-            {rootError && <Alert tone="error">{rootError}</Alert>}
+            {rootError && (
+                <div className="mb-4">
+                    <Alert tone="error">{rootError}</Alert>
+                </div>
+            )}
 
-            <Card className="p-6 md:p-8">
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+                <Card className="space-y-5 sm:p-6">
+                    <div>
+                        <h2 className={sectionTitle}>Details</h2>
+                        <p className={sectionHint}>A clear title and honest description sell faster.</p>
+                    </div>
                     <TextField
                         label="Title"
-                        placeholder="e.g. Contemporary Project Management:Plan-Driven and Agile Approaches, Fifth Edition"
+                        placeholder="e.g. Contemporary Project Management, 5th Edition"
                         error={errors.title?.message}
                         {...register('title')}
                     />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Textarea label="Description"
+                              placeholder="Describe condition and extra details... "
+                              rows={4}
+                              error={errors.description?.message}
+                              {...register('description')}
+                    />
+                </Card>
+
+                <Card className="space-y-5 sm:p-6">
+                    <div>
+                        <h2 className={sectionTitle}>Price &amp; category</h2>
+                        <p className={sectionHint}>Where buyers will find it, and what it costs.</p>
+                    </div>
+
+                    <TextField label="Price (ZAR)"
+                               type="number"
+                               inputMode="decimal"
+                               step="0.01"
+                               placeholder="0.00"
+                               className="tabular-nums"
+                               error={errors.price?.message}
+                               {...register('price')}
+                    />
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <Select
                             label="Category"
                             error={errors.categoryId?.message}
@@ -210,74 +267,82 @@ export const CreateListingPage: React.FC = () => {
                                 </option>
                             ))}
                         </Select>
-
-                        <TextField label="Price (ZAR)"
-                                   type="number"
-                                   step="0.01"
-                                   placeholder="0.00"
-                                   error={errors.price?.message}
-                                   {...register('price')}
-                        />
                     </div>
+                </Card>
 
-                    <Textarea label="Description"
-                              placeholder="Describe condition and extra details... "
-                              rows={4}
-                              error={errors.description?.message}
-                              {...register('description')}
-                    />
-
-                    <div className="space-y-1.5">
-                        <label htmlFor="imageFile" className="block text-sm font-medium text-ink-700">
-                            Upload image
-                        </label>
-                        <input
-                            id="imageFile"
-                            type="file"
-                            accept="image/jpeg,image/png,image/gif,image/webp"
-                            onChange={(event) => setImageFile(event.target.files?.[0] ?? null)}
-                            className="sr-only"
-                        />
-                        <label
-                            htmlFor="imageFile"
-                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-ink-700 hover:bg-gray-50"
-                        >
-                            <svg
-                                aria-hidden="true"
-                                className="h-4 w-4"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            >
-                                <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z" />
-                                <path d="M3 8h18" />
-                            </svg>
-                            Choose file
-                        </label>
-                        {imageFile && (
-                            <span className="ml-3 text-sm text-ink-600">{imageFile.name}</span>
-                        )}
-                        <p className="text-xs text-ink-400">
+                <Card className="space-y-4 sm:p-6">
+                    <div>
+                        <h2 className={sectionTitle}>Photo</h2>
+                        <p id="imageFile-hint" className={sectionHint}>
                             Choose a JPEG, PNG, GIF, or WebP image up to 10 MB. An image from your device is required.
                         </p>
                     </div>
 
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-                        <Button type="button"
-                                variant="ghost"
-                                onClick={() => navigate(-1)}
-                                disabled={isSubmitting}
-                        >Cancel</Button>
-                        <Button type="submit"
-                                disabled={isSubmitting || isLoadingCategories || isLoadingCampuses}>
-                            {isSubmitting ? 'Posting Listing...' : 'Post Listing'}
-                        </Button>
-                    </div>
-                </form>
-            </Card>
+                    <input
+                        id="imageFile"
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        aria-describedby="imageFile-hint"
+                        onChange={(event) => setImageFile(event.target.files?.[0] ?? null)}
+                        // Reset so picking the same file again after "Remove" still fires onChange.
+                        onClick={(event) => { event.currentTarget.value = ''; }}
+                        className="peer sr-only"
+                    />
+
+                    {imageFile && previewUrl ? (
+                        <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-muted/60 p-2.5">
+                            <img src={previewUrl} alt="" className="size-16 shrink-0 rounded-lg object-cover" />
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-fg">{imageFile.name}</p>
+                                <p className="text-xs tabular-nums text-fg-muted">
+                                    {(imageFile.size / (1024 * 1024)).toFixed(1)} MB
+                                </p>
+                                <label htmlFor="imageFile" className="mt-0.5 inline-block cursor-pointer text-sm font-semibold text-brand-700 hover:underline">
+                                    Change photo
+                                </label>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setImageFile(null)}
+                                aria-label="Remove photo"
+                                className="grid size-10 shrink-0 place-items-center rounded-full text-fg-muted transition hover:bg-surface-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
+                            >
+                                <X aria-hidden="true" weight="bold" className="size-4" />
+                            </button>
+                        </div>
+                    ) : (
+                        <label
+                            htmlFor="imageFile"
+                            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line-strong bg-surface-muted/50 px-4 py-8 text-center transition hover:border-brand-300 hover:bg-brand-50 active:scale-[0.99] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500"
+                        >
+                            <span className="grid size-12 place-items-center rounded-full bg-brand-50 text-brand-700">
+                                <Camera aria-hidden="true" weight="fill" className="size-6" />
+                            </span>
+                            <span className="text-sm font-semibold text-fg">Add a photo</span>
+                            <span className="flex items-center gap-1 text-xs text-fg-muted">
+                                <ImageSquare aria-hidden="true" className="size-4" />
+                                Tap to choose from your device
+                            </span>
+                        </label>
+                    )}
+                </Card>
+
+                {/* Phones: sticks above the BottomNav while the form is on screen. */}
+                <div className="glass-strong sticky bottom-[calc(var(--ux-bottom-nav)+0.5rem)] transition-[bottom] duration-300 z-10 flex gap-2 rounded-2xl border p-2.5 shadow-float md:static md:justify-end md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
+                    <Button type="button"
+                            variant="secondary"
+                            className="flex-1 md:w-auto md:flex-none"
+                            onClick={() => navigate(-1)}
+                            disabled={isSubmitting}
+                    >Cancel</Button>
+                    <Button type="submit"
+                            className="flex-[2] md:w-auto md:flex-none md:px-6"
+                            loading={isSubmitting}
+                            disabled={isSubmitting || isLoadingCategories || isLoadingCampuses}>
+                        {isSubmitting ? 'Posting Listing...' : 'Post Listing'}
+                    </Button>
+                </div>
+            </form>
         </div>
     );
 };

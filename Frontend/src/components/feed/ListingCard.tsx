@@ -1,48 +1,56 @@
 /*
   ListingCard - one item in the feed grid (T2 mockup: "2 Marketplace Feed").
 
-  Anatomy matches the desktop mockup:
-    image tile -> [category badge top-left] [favorite heart top-right]
-    category label + time-ago line
-    title
-    description snippet (2 lines)
-    price
-    seller row: avatar + name + subtext
+  Marketplace-style anatomy (Facebook Marketplace / the desktop mockup):
+    square image tile -> [status badge top-left] [favorite heart top-right]
+    price (big, first - it's what people scan for)
+    title (2 lines)
+    description snippet (2 lines, sm and up only - phones get 2 compact columns)
+    campus + time-ago line
+    seller row: avatar + name
 
-  ASSUMPTION FLAGGED: `listing.description` and `listing.sellerName` are used
-  below for the snippet and seller row. If those aren't real fields on
-  `Listing` yet, this renders the fallbacks shown - swap in the real field
-  names (or wire a sellers/{id} lookup) once you confirm what's on the DTO.
+  SOLD listings stay visible but dimmed (greyed image, struck-through price).
 
-  Image area is still a placeholder for v1; per-listing images cost one
-  request per card, added in v1.5.
+  The seller row uses `sellerName` and `sellerAffiliation`, which the listing
+  endpoints fill in from the seller's account. CPUT staff sellers read
+  "Sold by CPUT staff member" under their name.
+
+  The image tile shows `coverImageUrl` (the primary photo, picked by the backend
+  for the whole page in one query). Listings with no photo - or a photo that
+  fails to load - fall back to a tinted tile with the category icon.
 
   Owner: Joshua Reid Adams (230317693)
 */
 
+import { Heart, MapPin, UserCircle } from "@phosphor-icons/react";
 import { useState } from "react";
 
+import { CategoryIcon } from "./CategoryIcon";
 import { Avatar } from "@/components/ui/Avatar";
-import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import type { Listing } from "@/lib/api/types";
+import { safeUrl } from "@/lib/safeUrl";
 
 type ListingCardProps = {
   listing: Listing;
   /** Resolved campus name for the location line; falls back to a generic label. */
   campusName?: string;
+  /** Resolved category name - picks the placeholder icon on the image tile. */
+  categoryName?: string;
 };
 
 const zar = new Intl.NumberFormat("en-ZA", {
   style: "currency",
   currency: "ZAR",
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 0,
 });
 const DAY_MS = 24 * 60 * 60 * 1000;
 /* Evaluated once per page load - render stays pure (react-hooks/purity). */
 const NOW_MS = Date.now();
 
 function timeAgo(iso: string): string {
-  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  const seconds = Math.floor((NOW_MS - new Date(iso).getTime()) / 1000);
   if (seconds < 60) return "just now";
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -58,98 +66,139 @@ function timeAgo(iso: string): string {
   });
 }
 
-export function ListingCard({ listing, campusName }: ListingCardProps) {
+export function ListingCard({
+  listing,
+  campusName,
+  categoryName,
+}: ListingCardProps) {
   const isNew = NOW_MS - new Date(listing.createdAt).getTime() < DAY_MS;
   const isSold = listing.status === "SOLD";
   const [favorited, setFavorited] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+  const cover = imageFailed ? null : (safeUrl(listing.coverImageUrl) ?? null);
 
-  // See ASSUMPTION FLAGGED note above - these two fields may not exist yet.
-  const description = (listing as { description?: string }).description;
-  const sellerName = (listing as { sellerName?: string }).sellerName;
+  const description = listing.description;
+  const sellerName = listing.sellerName ?? null;
+  const isStaffSeller = listing.sellerAffiliation === "STAFF";
 
   return (
     <Card
       to={`/listings/${listing.listingId}`}
-      className="group flex h-full flex-col gap-2 p-3 transition-all hover:-translate-y-0.5 hover:shadow-md"
+      padding="none"
+      className="group flex h-full flex-col overflow-hidden active:scale-[0.98]"
     >
-      <div className="relative overflow-hidden rounded-xl bg-gray-100">
-        <div className="flex aspect-[4/3] items-center justify-center text-gray-400 transition-transform duration-300 group-hover:scale-105">
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            className="size-10"
-          >
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <circle cx="9" cy="10" r="1.5" />
-            <path
-              d="m5 18 4.5-5 3 3.5L15 13l4 5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+      <div className="relative overflow-hidden bg-linear-to-br from-brand-50 via-surface-muted to-brand-100">
+        <div
+          className={`grid aspect-square place-items-center text-brand-600 transition duration-300 motion-safe:group-hover:scale-105 ${
+            isSold ? "opacity-50 grayscale" : ""
+          }`}
+        >
+          {cover ? (
+            <img
+              src={cover}
+              alt={listing.title}
+              loading="lazy"
+              decoding="async"
+              onError={() => setImageFailed(true)}
+              className="size-full object-cover"
             />
-          </svg>
+          ) : (
+            <CategoryIcon
+              name={categoryName ?? ""}
+              weight="duotone"
+              className="size-12 opacity-70 sm:size-14"
+            />
+          )}
         </div>
 
-        {/* Top-left status/category badge, matching the mock's tinted tag. */}
-        <span className="absolute left-2 top-2">
-          {isSold ? (
-            <Badge tone="neutral">SOLD</Badge>
-          ) : isNew ? (
-            <Badge tone="success">Just listed</Badge>
-          ) : null}
-        </span>
+        {/* Top-left status badge. */}
+        {(isSold || isNew) && (
+          <span
+            className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide shadow-sm ${
+              isSold
+                ? "bg-slate-950/70 text-white"
+                : "bg-emerald-50 text-emerald-700"
+            }`}
+          >
+            {isSold ? "Sold" : "New"}
+          </span>
+        )}
 
-        {/* Top-right favorite toggle, visual only for now. */}
+        {/* Top-right favorite toggle, visual only for now. The button is a
+            40px hit area around a 32px glass disc. */}
         <button
           type="button"
           onClick={(event) => {
             event.preventDefault();
+            event.stopPropagation();
             setFavorited((value) => !value);
           }}
           aria-pressed={favorited}
           aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
-          className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-white/90 text-ink-500 shadow-sm transition hover:text-brand-600"
+          className="absolute right-1 top-1 grid size-10 place-items-center rounded-full focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500"
         >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            fill={favorited ? "currentColor" : "none"}
-            stroke="currentColor"
-            strokeWidth="1.75"
-            className={`size-4 ${favorited ? "text-brand-600" : ""}`}
+          <span
+            className={`glass-strong grid size-8 place-items-center rounded-full border shadow-sm transition active:scale-90 ${
+              favorited ? "text-red-600" : "text-fg-muted hover:text-red-600"
+            }`}
           >
-            <path
-              d="M12 20s-6.5-4.1-9-8.2C1.2 8.7 2.4 5 6 5c2 0 3.4 1 4 2.3C10.6 6 12 5 14 5c3.6 0 4.8 3.7 3 6.8-2.5 4.1-9 8.2-9 8.2Z"
-              strokeLinejoin="round"
+            <Heart
+              aria-hidden="true"
+              weight={favorited ? "fill" : "bold"}
+              className="size-4"
             />
-          </svg>
+          </span>
         </button>
       </div>
 
-      <p className="text-xs text-ink-400">
-        {campusName ?? "On campus"} <span aria-hidden="true">•</span>{" "}
-        {timeAgo(listing.createdAt)}
-      </p>
+      <div className="flex flex-1 flex-col p-2.5 sm:p-3">
+        <p
+          className={`text-base font-bold tabular-nums sm:text-lg ${
+            isSold ? "text-fg-muted line-through" : "text-fg"
+          }`}
+        >
+          {zar.format(listing.price)}
+        </p>
 
-      <h3 className="line-clamp-2 text-sm font-semibold text-ink-900">
-        {listing.title}
-      </h3>
+        <h3 className="mt-0.5 line-clamp-2 text-sm leading-snug font-medium text-fg">
+          {listing.title}
+        </h3>
 
-      {description && (
-        <p className="line-clamp-2 text-xs text-ink-500">{description}</p>
-      )}
+        {description && (
+          <p className="mt-1 hidden text-xs text-fg-muted sm:line-clamp-2">
+            {description}
+          </p>
+        )}
 
-      <p className="text-base font-bold text-brand-700">
-        {zar.format(listing.price)}
-      </p>
+        <p className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-fg-muted">
+          <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+          <span className="truncate">
+            {campusName ?? "On campus"}{" "}
+            <span aria-hidden="true">·</span> {timeAgo(listing.createdAt)}
+          </span>
+        </p>
 
-      <div className="mt-auto flex items-center gap-2 pt-1">
-        <Avatar name={sellerName} className="size-6 shrink-0" />
-        <span className="truncate text-xs font-medium text-ink-700">
-          {sellerName ?? "Seller"}
-        </span>
+        <div className="mt-auto flex items-center gap-1.5 pt-2.5">
+          {sellerName ? (
+            <Avatar name={sellerName} className="size-5 text-[9px]" />
+          ) : (
+            <UserCircle
+              aria-hidden="true"
+              weight="fill"
+              className="size-5 shrink-0 text-fg-subtle"
+            />
+          )}
+          <span className="min-w-0">
+            <span className="block truncate text-xs font-medium text-fg-muted">
+              {sellerName ?? "Student seller"}
+            </span>
+            {isStaffSeller && (
+              <span className="block truncate text-[11px] font-semibold text-brand-700">
+                Sold by CPUT staff member
+              </span>
+            )}
+          </span>
+        </div>
       </div>
     </Card>
   );

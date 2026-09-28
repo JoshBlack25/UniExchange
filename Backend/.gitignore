@@ -41,3 +41,12 @@ src/test/resources/application-local.properties
 
 # Chat attachments (see app.chat.media.dir). Private - never served from /uploads/**.
 /chat-media/
+
+
+# Secrets: environment files and per-machine / per-deployment property overrides.
+# .env.example stays tracked as the template.
+.env
+.env.*
+!.env.example
+**/application-local.properties
+**/application-prod-secrets.properties

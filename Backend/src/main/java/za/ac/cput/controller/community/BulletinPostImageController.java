@@ -3,10 +3,14 @@
 
  REST endpoints for BulletinPostImage.
 
- Unlike ListingImageController (which has no ownership check), create/update/
- delete here confirm that the caller owns the PARENT bulletin post before
- attaching/changing/removing an image on it, mirroring the ownership check in
- BulletinPostController.
+ create/update/delete confirm that the caller owns the PARENT bulletin post
+ before attaching/changing/removing an image on it, mirroring the ownership check
+ in BulletinPostController. update also checks the TARGET post, or an image could
+ be moved onto someone else's post.
+
+ A client-supplied imageUrl must be an /uploads/... file the caller uploaded
+ (LocalFileStorage records the owner). Anything else - another student's file,
+ an external or javascript: URL - is refused with a 400.
 
  Author: Aidan Barends 230255639
  Date: 17 September 2026
@@ -15,6 +19,7 @@
 package za.ac.cput.controller.community;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +40,7 @@ import za.ac.cput.factory.community.BulletinPostImageFactory;
 import za.ac.cput.security.UniExchangeUserDetailsService.AuthenticatedUser;
 import za.ac.cput.service.community.IBulletinPostImageService;
 import za.ac.cput.service.community.IBulletinPostService;
+import za.ac.cput.storage.LocalFileStorage;
 
 @RestController
 @RequestMapping("/api/bulletin-post-images")
@@ -42,10 +48,13 @@ public class BulletinPostImageController {
 
     private final IBulletinPostImageService service;
     private final IBulletinPostService postService;
+    private final LocalFileStorage uploads;
 
-    public BulletinPostImageController(IBulletinPostImageService service, IBulletinPostService postService) {
+    public BulletinPostImageController(IBulletinPostImageService service, IBulletinPostService postService,
+                                       LocalFileStorage uploads) {
         this.service = service;
         this.postService = postService;
+        this.uploads = uploads;
     }
 
     @PostMapping
@@ -58,6 +67,7 @@ public class BulletinPostImageController {
         if (post.getAuthorId() != principal.getUser().getUserId()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
+        requireOwnUpload(request.imageUrl(), principal);
         BulletinPostImage created = this.service.create(BulletinPostImageFactory.createBulletinPostImage(
                 request.bulletinPostId(), request.imageUrl(), request.position(), request.isPrimary()));
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
@@ -77,8 +87,12 @@ public class BulletinPostImageController {
         if (existing == null) {
             return ResponseEntity.notFound().build();
         }
-        if (!isOwner(existing.getBulletinPostId(), principal)) {
+        // Both the post it is on now AND the one it would move to.
+        if (!isOwner(existing.getBulletinPostId(), principal) || !isOwner(request.bulletinPostId(), principal)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        if (!Objects.equals(existing.getImageUrl(), request.imageUrl())) {
+            requireOwnUpload(request.imageUrl(), principal);
         }
         return ResponseEntity.ok(this.service.update(BulletinPostImageFactory.updateBulletinPostImage(
                 existing, request.bulletinPostId(), request.imageUrl(), request.position(),
@@ -108,6 +122,12 @@ public class BulletinPostImageController {
     @GetMapping("/bulletin-post/{bulletinPostId}")
     public List<BulletinPostImage> byPost(@PathVariable long bulletinPostId) {
         return this.service.findByBulletinPostId(bulletinPostId);
+    }
+
+    private void requireOwnUpload(String imageUrl, AuthenticatedUser principal) {
+        if (!this.uploads.isOwnedBy(imageUrl, principal.getUser().getUserId())) {
+            throw new IllegalArgumentException("Upload the image first; only your own uploads can be attached");
+        }
     }
 
     private boolean isOwner(long bulletinPostId, AuthenticatedUser principal) {

@@ -23,8 +23,13 @@
   row and the modal can't disagree about where something goes.
 
   Components used only by this page live in src/components/notifications/.
+
+  Layout: a centred feed-width column (Columns narrow) - filter chips, then
+  one glass card per day group. The safety callout sits in the right rail
+  at xl and inline under the list below that, so it is never lost.
 */
 
+import { Checks } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/auth/useAuth";
@@ -36,9 +41,12 @@ import {
 } from "@/components/notifications/NotificationFilters";
 import { NotificationRow } from "@/components/notifications/NotificationRow";
 import { NotificationsSafetyCallout } from "@/components/notifications/NotificationsSafetyCallout";
+import { Columns } from "@/components/layout/Columns";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Seo } from "@/components/seo/Seo";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { notificationsApi } from "@/lib/api/notifications";
 import type { Notification } from "@/lib/api/types";
@@ -142,64 +150,85 @@ export function NotificationsPage() {
   }
 
   return (
-    <>
+    <Columns
+      narrow
+      aside={<NotificationsSafetyCallout />}
+      asideLabel="Safety"
+    >
+      <Seo
+        title="Notifications"
+        description="Messages, purchases, reviews and announcements on your UniExchange account."
+        path="/notifications"
+        noindex
+      />
       <PageHeader
         title={
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             Notifications
             {unreadCount > 0 && (
-              <Badge tone="brand">{unreadCount} unread</Badge>
+              <Badge tone="brand">
+                <span className="tabular-nums">{unreadCount}</span> unread
+              </Badge>
             )}
           </span>
         }
         subtitle="Messages, sales and campus news"
         action={
           unreadCount > 0 ? (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={markAllAsRead}
-              className="text-sm font-medium text-brand-700 hover:text-brand-900"
+              className="w-auto -mx-2 whitespace-nowrap"
             >
-              ✓ Mark all as read
-            </button>
+              <Checks aria-hidden="true" className="size-5 shrink-0" />
+              <span className="hidden sm:inline">Mark all as read</span>
+              <span className="sm:hidden">Mark all read</span>
+            </Button>
           ) : undefined
         }
       />
 
       {error && (
-        <Alert tone="error">
-          <div className="flex items-center justify-between gap-3">
-            <span>{error}</span>
-            <button
-              type="button"
-              onClick={() => {
-                setError(null);
-                setRefreshKey((key) => key + 1);
-              }}
-              className="shrink-0 font-semibold underline"
-            >
-              Retry
-            </button>
-          </div>
-        </Alert>
+        <div className="mb-4">
+          <Alert tone="error">
+            <div className="flex items-center justify-between gap-3">
+              <span>{error}</span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setError(null);
+                  setRefreshKey((key) => key + 1);
+                }}
+                className="w-auto shrink-0"
+              >
+                Retry
+              </Button>
+            </div>
+          </Alert>
+        </div>
       )}
 
-      <div className="mt-2">
-        <NotificationFilters
-          active={filter}
-          unreadCount={unreadCount}
-          onChange={setFilter}
-        />
-      </div>
+      <NotificationFilters
+        active={filter}
+        unreadCount={unreadCount}
+        onChange={setFilter}
+      />
 
       <div className="mt-4">
         {notifications === null && !error ? (
-          <div className="space-y-2">
+          <div
+            aria-hidden="true"
+            className="glass-card space-y-1 rounded-2xl border p-2 shadow-glass"
+          >
             {Array.from({ length: 5 }, (_, index) => (
-              <div
-                key={index}
-                className="h-16 animate-pulse rounded-xl bg-gray-100"
-              />
+              <div key={index} className="flex items-center gap-3 px-2.5 py-2.5">
+                <span className="size-12 shrink-0 animate-pulse rounded-full bg-surface-muted" />
+                <span className="flex-1 space-y-2">
+                  <span className="block h-3.5 w-3/5 animate-pulse rounded-full bg-surface-muted" />
+                  <span className="block h-3 w-4/5 animate-pulse rounded-full bg-surface-muted" />
+                </span>
+              </div>
             ))}
           </div>
         ) : error ? null : groups.length === 0 ? (
@@ -216,19 +245,26 @@ export function NotificationsPage() {
             }
           />
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {groups.map((group) => (
-              <div key={group.label}>
-                <div className="flex items-baseline justify-between px-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+              <section
+                key={group.label}
+                aria-labelledby={`notifications-${group.label.replace(/\s+/g, "-")}`}
+                className="glass-card rounded-2xl border p-2 shadow-glass"
+              >
+                <div className="flex items-baseline justify-between px-2.5 pb-1 pt-2">
+                  <h2
+                    id={`notifications-${group.label.replace(/\s+/g, "-")}`}
+                    className="text-base font-semibold text-fg"
+                  >
                     {group.label}
-                  </p>
-                  <p className="text-xs text-ink-400">
+                  </h2>
+                  <p className="text-xs tabular-nums text-fg-muted">
                     {group.items.length}{" "}
                     {group.items.length === 1 ? "item" : "items"}
                   </p>
                 </div>
-                <ul className="mt-2 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200">
+                <ul className="space-y-0.5">
                   {group.items.map((notification) => (
                     <NotificationRow
                       key={notification.notificationId}
@@ -237,13 +273,13 @@ export function NotificationsPage() {
                     />
                   ))}
                 </ul>
-              </div>
+              </section>
             ))}
           </div>
         )}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 xl:hidden">
         <NotificationsSafetyCallout />
       </div>
 
@@ -253,6 +289,6 @@ export function NotificationsPage() {
           onClose={() => setOpenNotification(null)}
         />
       )}
-    </>
+    </Columns>
   );
 }
